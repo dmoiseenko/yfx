@@ -55,6 +55,23 @@ into this `yfx` repo and removed the skills from the origin project.
     already inside a strong model. The non-redundant value is the independent **fresh-lens (UU)**,
     which a self-check cannot replicate. That's the next focus.
 
+## Next — chosen directions (2026-07-27)
+
+Picked after the efficacy pass: the x/y self-probe is largely internalized in a strong model,
+while the independent audit carries the non-redundant value. The in-vivo UU test made it concrete
+— a cold agent surfaced load-bearing blind spots the *invested* executor missed (e.g. "you
+extracted the self-probe as the core and baked the self-audit blindness back in"). These three
+compose into one move: reposition the framework around the independent lens.
+
+1. **Make fresh-lens the core.** Demote the x/y readiness probe from centerpiece; the independent
+   audit is where the value concentrated.
+2. **`/2nd` — a "second opinion" command.** The fresh-lens made dead-simple: before an irreversible
+   step, spawn a fresh cold agent to red-team the current plan. The concrete delivery vehicle for #1.
+3. **A "kill / not-worth-building" verdict.** Give the framework a terminal for "the honest answer
+   is no" — closes open UU #3 (no decline/null terminal).
+
+(Not chosen this round: better exogenous triggers — open UU #1.)
+
 ## Unresolved — do not silently contradict
 
 **The 5 open UU / caveats** (full text in `convergence-protocol.md` → "Open UU / caveats"):
