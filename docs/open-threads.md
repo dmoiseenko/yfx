@@ -38,6 +38,22 @@ into this `yfx` repo and removed the skills from the origin project.
   `x`** — that the target lives in the image of `f`. It's a premise, not a theorem: an unreachable
   `y` makes the convergence ritual adjust `x` forever instead of quitting. Directly compounds
   open UU #3 (no decline/null terminal — no exit for an out-of-range `y`).
+- **Abstract core extracted + efficacy-tested (`readiness.md`).** Lifted the x/y diagnosis into a
+  tool-agnostic probe (`ready | need-x | need-y | need-both`) that reads only the transcript, so it
+  ports to Codex (`examples/AGENTS.md`) or any agent. Then tested the sharp question — *does it change
+  anything, or is that logic already inside the model?*
+  - **Naive A/B** (`evals/readiness-try.mjs`): baseline handed an act/ask/retrieve menu + answer-
+    leaking context → **0/9 changed**. But that test was rigged toward null (the menu is half the
+    probe; the context leaked the answer).
+  - **Fair A/B** (`evals/readiness-fair.mjs`): clean baseline (model just begins its response, an
+    independent judge labels the move), neutral context, k samples → **baseline 67% → probe 89%,
+    +22 pts**. Value concentrates in *consistency*: on trap-x the baseline is unstable (67% — sometimes
+    asks instead of retrieving) while the probe is 100%; on obvious trap-y it's already inside
+    (100%/100%). Caveats: judge noise likely inflates the clear-case gap (baseline preamble read as a
+    pause); the probe *hurt* once on a subtle trap-y (over-flagged); n=6, k=3.
+  - **Read:** the x/y self-probe is modest edge-case insurance, not a transformation — much of it is
+    already inside a strong model. The non-redundant value is the independent **fresh-lens (UU)**,
+    which a self-check cannot replicate. That's the next focus.
 
 ## Unresolved — do not silently contradict
 
