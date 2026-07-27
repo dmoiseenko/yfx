@@ -70,7 +70,7 @@ the class it's hired to catch.
 
 ```
 skills/
-  recall/        — /recall (fill x) + its evals
+  recall/        — /recall (fill x)
   clarify/       — /clarify (sharpen y)
   fresh-lens/    — /fresh-lens (detect mode + audit for unknown-unknowns)
   xy-diagnosis.md — Step 0: x-vs-y diagnosis, shared by recall & clarify
@@ -81,14 +81,38 @@ docs/
   convergence-protocol.md   — the protocol, discovery-vs-delivery modes, open UU/caveats
   uu-fresh-lens.md          — why UU need an independent lens; the cheap-artifact form
   mode-detector.md          — the discovery/delivery classifier (validated 8/8)
+  open-threads.md           — current state and what's still unresolved
+evals/          — L0 blind-label replay harness (classifier vs independent truth)
+install.sh      — symlink skills + hooks into ~/.claude/
 ```
 
 Both hooks are **off by default** (toggle via an env var or a marker file — see each file's
 header), so installing them globally is dormant until you opt in per project.
 
-## Activating it where you work
+## Getting started
 
-Skills and hooks are scoped to the `.claude/` of the project you run Claude in. To use this
-framework across projects, install it into your user-global `~/.claude/` (skills → `~/.claude/skills/`,
-hooks → `~/.claude/hooks/` + wire them in `~/.claude/settings.json`), OR symlink the dirs into a
-project's `.claude/`. This repo is the versioned source of truth; the install is a copy/symlink.
+```bash
+git clone https://github.com/dmoiseenko/yfx && cd yfx
+./install.sh          # symlink skills + hooks into ~/.claude/ (idempotent; --force to replace)
+```
+
+That makes the probes available in every project you run Claude in. Alternatively symlink
+`skills/` + `hooks/` into a single project's `.claude/`, or copy them by hand — this repo is the
+versioned source of truth, the install is just symlinks pointing back here.
+
+**Works with no dependencies:** `/clarify` (pick-a-direction) and `/fresh-lens` (spawns an
+independent sub-agent) are pure Claude Code — available immediately. `xy-diagnosis` is the shared
+Step-0 method they build on.
+
+**Needs [claude-mem](https://github.com/thedotmack/claude-mem):** `/recall`'s "fill x" step
+searches persistent memory via claude-mem's tools; without it installed, `/recall` degrades to the
+x/y diagnosis with no retrieval. The `recall-context` hook needs the claude-mem worker too.
+
+**Hooks are off by default.** `install.sh` links them in but they stay dormant until you wire them
+in `~/.claude/settings.json` and set each one's opt-in flag (`FRESH_LENS_TRIGGER=1`, or a
+`.claude/fresh-lens.on` marker) — the installer prints the exact snippet.
+
+**One honest caveat:** the framework was developed and validated on a single private project (n=1).
+The concepts and probes transfer; the specific numbers (mode 8/8, recall@k) come from that origin and
+aren't a promise for your codebase. Treat the recorded decisions as provisional — see
+[`docs/open-threads.md`](docs/open-threads.md).
