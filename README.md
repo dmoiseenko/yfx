@@ -83,6 +83,9 @@ docs/
   mode-detector.md          — the discovery/delivery classifier (validated 8/8)
   open-threads.md           — current state and what's still unresolved
 evals/          — L0 blind-label replay harness (classifier vs independent truth)
+readiness.md    — the tool-agnostic core probe (is x sufficient / y clear — works in any agent)
+examples/
+  AGENTS.md     — copy-in Codex wiring for the readiness probe
 install.sh      — symlink skills + hooks into ~/.claude/
 ```
 
@@ -111,6 +114,12 @@ x/y diagnosis with no retrieval. The `recall-context` hook needs the claude-mem 
 **Hooks are off by default.** `install.sh` links them in but they stay dormant until you wire them
 in `~/.claude/settings.json` and set each one's opt-in flag (`FRESH_LENS_TRIGGER=1`, or a
 `.claude/fresh-lens.on` marker) — the installer prints the exact snippet.
+
+**The portable core (Codex, or any agent):** the skills above are Claude Code packaging, but the
+heart of the loop — *is x sufficient, is y clear, right now?* — is one tool-agnostic probe that
+reads only the current chat. See [`readiness.md`](readiness.md). To wire it into Codex, copy
+[`examples/AGENTS.md`](examples/AGENTS.md) into your project's `AGENTS.md` (self-contained, no
+install). Any other agent: paste the probe as a preamble.
 
 **One honest caveat:** the framework was developed and validated on a single private project (n=1).
 The concepts and probes transfer; the specific numbers (mode 8/8, recall@k) come from that origin and
