@@ -1,0 +1,57 @@
+---
+name: 2nd
+description: Get a second opinion before an irreversible step — spawn a FRESH, independent agent to red-team the plan you're about to commit. It surfaces blind spots you can't see from inside, and can return "don't build this." Use before commit / merge / publish / a decision you'll build on. The independence is the point — never self-audit.
+---
+
+# /2nd — a second opinion from an agent that isn't you
+
+You're about to do something costly to reverse — commit, merge, publish, a migration, a design
+you'll build on. Before you lock it in, get one independent read. **Not you re-checking yourself**
+— a fresh agent with cold context and no stake in your framing.
+
+This isn't a style preference; it's the one thing self-review can't do. Tested in-vivo in this repo:
+an *invested* executor's self-audit missed load-bearing blind spots that a cold agent caught —
+including that the executor had extracted the wrong half of its own framework. You are blindest
+exactly where you're most invested, and you can't feel it from inside.
+
+## When to run
+
+- Before an **irreversible / committing** step (commit, merge, publish, delete, a decision others build on).
+- On a plan you feel **confident** about — confidence is precisely when you won't self-flag the blind spot.
+- **Not** on warm, cheap-to-reverse steps — that's just friction.
+
+## How
+
+1. **Distill** the plan into a few neutral lines: what you're about to do, why, and the main
+   alternatives you considered or rejected. Do **not** include your conclusion about what's right.
+2. **Spawn a fresh agent** — `Agent`, `subagent_type: claude`, synchronous — cold, with the mandate
+   below. Do **not** prime it with your reasoning; that infects the lens.
+3. **Relay** its findings to the user verbatim, including a "don't build this" if it lands. The user decides.
+
+## The mandate (paste verbatim; do not add your own read)
+
+> You are a FRESH second opinion with no stake in this plan. Assume it may be the wrong thing to do.
+> Two jobs:
+> 1. **Blind spots** — assumptions, framings, or whole axes that NEITHER party voiced, outside their
+>    option set. Ranked most load-bearing first, at most 4, specific to THIS plan. Drop anything
+>    generic enough to apply to any plan.
+> 2. **Verdict** — exactly one of: `proceed` (sound as-is), `adjust` (fix a named blind spot first),
+>    or `don't-build` (the honest answer is this shouldn't be done — say why). Desirability counts:
+>    a fully-specified plan can still be the wrong thing to build.
+>
+> For each blind spot: the unspoken assumption (one line) / the failure it hides / the question they
+> should be asking but aren't. Do not validate the plan — your value is only in what they cannot see.
+> Output the verdict, then the ranked blind spots.
+
+## Then
+
+- **proceed** → go, with the blind spots noted.
+- **adjust** → resolve the named axis first, and persist it so it isn't re-discovered next time.
+- **don't-build** → stop and surface it. `y = f(x)` has no value for "the answer is no" by default;
+  this verdict is where the framework finally gets one.
+
+## Why independence, not a better self-check
+
+A watcher carrying your priors is blind to exactly the class it's hired to catch — confirmed
+in-vivo here, not assumed. `/2nd` is [fresh-lens](../fresh-lens/SKILL.md) reduced to one move; the
+rationale lives in [uu-fresh-lens](../../docs/uu-fresh-lens.md).

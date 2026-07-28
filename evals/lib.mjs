@@ -69,6 +69,15 @@ export function shippedModeMandate() {
   return lines.join("\n").trim();
 }
 
+// Extract the SHIPPED fresh-lens UU-audit mandate verbatim from the skill, so the
+// UU eval tests the real artifact.
+export function shippedAuditMandate() {
+  const md = readFileSync(join(REPO, "skills", "fresh-lens", "SKILL.md"), "utf8");
+  const sec = md.split("## When NOT to run")[0].split("## Mode: audit")[1] || "";
+  const lines = sec.split("\n").filter((l) => /^>\s?/.test(l)).map((l) => l.replace(/^>\s?/, ""));
+  return lines.join("\n").trim();
+}
+
 // The Step-0 x/y routing method, distilled from xy-diagnosis.md into a compact
 // classifier prompt (the doc itself is prose guidance, not a tight prompt).
 export const ROUTE_METHOD = `Decide what is missing BEFORE acting on this request, via two probes:
