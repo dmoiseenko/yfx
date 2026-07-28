@@ -63,12 +63,20 @@ while the independent audit carries the non-redundant value. The in-vivo UU test
 extracted the self-probe as the core and baked the self-audit blindness back in"). These three
 compose into one move: reposition the framework around the independent lens.
 
-1. **Make fresh-lens the core.** Demote the x/y readiness probe from centerpiece; the independent
-   audit is where the value concentrated.
+1. **Center independence as an architectural principle** — *corrected 2026-07-28 by a live `/2nd`
+   run on the repositioning plan itself* (dogfood; verdict `adjust`). The original wording was
+   "make fresh-lens the core, demote the x/y probe." The independent audit corrected it:
+   - **Pipeline, not ranking.** The independent lens likely wins *because* x/y ran first — it
+     red-teams a concrete artifact. x/y (cheap, always-on) is the setup that *feeds* the occasional,
+     expensive independent pass. Demoting x/y would break the condition under which the lens wins.
+   - **The durable asset is independence-as-architecture**, not "this probe won." x/y also stops
+     being redundant off the frontier model, so it stays as the always-on floor.
+   - **Open before crowning `/2nd`:** it was promoted on n=1. It needs its own hit / false-alarm
+     A/B — the same bar x/y was held to — before it headlines.
 2. **`/2nd` — a "second opinion" command.** The fresh-lens made dead-simple: before an irreversible
-   step, spawn a fresh cold agent to red-team the current plan. The concrete delivery vehicle for #1.
+   step, spawn a fresh cold agent to red-team the current plan. Shipped (`skills/2nd/SKILL.md`).
 3. **A "kill / not-worth-building" verdict.** Give the framework a terminal for "the honest answer
-   is no" — closes open UU #3 (no decline/null terminal).
+   is no" — closes open UU #3. Shipped as `/2nd`'s `don't-build` verdict.
 
 (Not chosen this round: better exogenous triggers — open UU #1.)
 
