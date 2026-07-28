@@ -97,6 +97,22 @@ compose into one move: reposition the framework around the independent lens.
 5. **Memory persist = lock-in priced at zero** — n=1, days old, frozen into standing default.
    Separate *durable rationale* from *active default*; treat these decisions as **provisional**.
 
+## Update 2026-07-28 — the nature of f (new frame, unvalidated)
+
+New conceptual thread in [`docs/nature-of-f.md`](nature-of-f.md). Two moves worth the design record:
+
+- **Two lever classes, only one named so far.** `x`-levers change what `f` is conditioned on
+  (`/recall`, `/clarify`); **`f`-levers** change or augment the transformation (model choice, the
+  hooks, and `/fresh-lens` — which adds a *second operator alongside `f`*, not more `x`). Refines
+  the README's "`x` is the only knob" (true within a session, not the whole story).
+- **The equation upgrades to `y ≈ combine( f(x), g(x) )`.** `f` has a knowable drift (precondition
+  `x` to cancel it) and is structurally blind to itself (so add independent `g` = `/fresh-lens`,
+  `/2nd`). This is the same pipeline finding from below, stated as a model: `f(x)` feeds the artifact
+  `g` red-teams; `g` is a second *term*, not a ranking above `f`.
+- **Status: argument only, n=0.** It *predicts* `g` adds non-redundant value — exactly what the
+  still-owed `/2nd` hit/false-alarm A/B must show. `combine` is undefined (assumes user attention,
+  caveat #2). Doesn't touch the reachability / null-terminal gap (caveat #3).
+
 **Other threads:**
 - **Not installed anywhere active.** The framework currently only works when running Claude
   *inside* this repo. To use it in other projects, install into user-global `~/.claude/`

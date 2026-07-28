@@ -14,6 +14,8 @@ rejected alternatives, and open questions — is committed as files. **Read thes
   opposite defaults; the **Open UU / caveats** block (unresolved, do not silently contradict).
 - `docs/uu-fresh-lens.md` — why unknown-unknowns need an *independent* lens, and the cheap-artifact form.
 - `docs/mode-detector.md` — the discovery/delivery classifier (validated 8/8) and its caveats.
+- `docs/nature-of-f.md` — properties of `f` (drift, self-blindness); the `y ≈ combine(f(x), g(x))`
+  reframe and the x-lever/f-lever split. Conceptual, provisional (n=0).
 - `docs/open-threads.md` — where this work stands and what's still unresolved. Start here for state.
 
 These docs use `[[wikilinks]]` because they originated as agent memory notes in the private

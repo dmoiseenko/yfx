@@ -81,6 +81,7 @@ docs/
   convergence-protocol.md   — the protocol, discovery-vs-delivery modes, open UU/caveats
   uu-fresh-lens.md          — why UU need an independent lens; the cheap-artifact form
   mode-detector.md          — the discovery/delivery classifier (validated 8/8)
+  nature-of-f.md            — properties of f; the y ≈ combine(f(x), g(x)) reframe (provisional)
   open-threads.md           — current state and what's still unresolved
 evals/          — L0 blind-label replay harness (classifier vs independent truth)
 readiness.md    — the tool-agnostic core probe (is x sufficient / y clear — works in any agent)
