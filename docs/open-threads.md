@@ -63,12 +63,20 @@ while the independent audit carries the non-redundant value. The in-vivo UU test
 extracted the self-probe as the core and baked the self-audit blindness back in"). These three
 compose into one move: reposition the framework around the independent lens.
 
-1. **Make fresh-lens the core.** Demote the x/y readiness probe from centerpiece; the independent
-   audit is where the value concentrated.
+1. **Center independence as an architectural principle** — *corrected 2026-07-28 by a live `/2nd`
+   run on the repositioning plan itself* (dogfood; verdict `adjust`). The original wording was
+   "make fresh-lens the core, demote the x/y probe." The independent audit corrected it:
+   - **Pipeline, not ranking.** The independent lens likely wins *because* x/y ran first — it
+     red-teams a concrete artifact. x/y (cheap, always-on) is the setup that *feeds* the occasional,
+     expensive independent pass. Demoting x/y would break the condition under which the lens wins.
+   - **The durable asset is independence-as-architecture**, not "this probe won." x/y also stops
+     being redundant off the frontier model, so it stays as the always-on floor.
+   - **Open before crowning `/2nd`:** it was promoted on n=1. It needs its own hit / false-alarm
+     A/B — the same bar x/y was held to — before it headlines.
 2. **`/2nd` — a "second opinion" command.** The fresh-lens made dead-simple: before an irreversible
-   step, spawn a fresh cold agent to red-team the current plan. The concrete delivery vehicle for #1.
+   step, spawn a fresh cold agent to red-team the current plan. Shipped (`skills/2nd/SKILL.md`).
 3. **A "kill / not-worth-building" verdict.** Give the framework a terminal for "the honest answer
-   is no" — closes open UU #3 (no decline/null terminal).
+   is no" — closes open UU #3. Shipped as `/2nd`'s `don't-build` verdict.
 
 (Not chosen this round: better exogenous triggers — open UU #1.)
 
@@ -88,6 +96,22 @@ compose into one move: reposition the framework around the independent lens.
    make mode user-declarable. Unbuilt.
 5. **Memory persist = lock-in priced at zero** — n=1, days old, frozen into standing default.
    Separate *durable rationale* from *active default*; treat these decisions as **provisional**.
+
+## Update 2026-07-28 — the nature of f (new frame, unvalidated)
+
+New conceptual thread in [`docs/nature-of-f.md`](nature-of-f.md). Two moves worth the design record:
+
+- **Two lever classes, only one named so far.** `x`-levers change what `f` is conditioned on
+  (`/recall`, `/clarify`); **`f`-levers** change or augment the transformation (model choice, the
+  hooks, and `/fresh-lens` — which adds a *second operator alongside `f`*, not more `x`). Refines
+  the README's "`x` is the only knob" (true within a session, not the whole story).
+- **The equation upgrades to `y ≈ combine( f(x), g(x) )`.** `f` has a knowable drift (precondition
+  `x` to cancel it) and is structurally blind to itself (so add independent `g` = `/fresh-lens`,
+  `/2nd`). This is the same pipeline finding from below, stated as a model: `f(x)` feeds the artifact
+  `g` red-teams; `g` is a second *term*, not a ranking above `f`.
+- **Status: argument only, n=0.** It *predicts* `g` adds non-redundant value — exactly what the
+  still-owed `/2nd` hit/false-alarm A/B must show. `combine` is undefined (assumes user attention,
+  caveat #2). Doesn't touch the reachability / null-terminal gap (caveat #3).
 
 **Other threads:**
 - **Not installed anywhere active.** The framework currently only works when running Claude
