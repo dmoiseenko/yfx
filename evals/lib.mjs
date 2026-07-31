@@ -78,6 +78,15 @@ export function shippedAuditMandate() {
   return lines.join("\n").trim();
 }
 
+// Extract the SHIPPED /2nd mandate verbatim from the skill, so the second-opinion
+// eval tests the real artifact and follows it if the skill text changes.
+export function shippedSecondMandate() {
+  const md = readFileSync(join(REPO, "skills", "2nd", "SKILL.md"), "utf8");
+  const sec = md.split("## Then")[0].split("## The mandate")[1] || "";
+  const lines = sec.split("\n").filter((l) => /^>\s?/.test(l)).map((l) => l.replace(/^>\s?/, ""));
+  return lines.join("\n").trim();
+}
+
 // The Step-0 x/y routing method, distilled from xy-diagnosis.md into a compact
 // classifier prompt (the doc itself is prose guidance, not a tight prompt).
 export const ROUTE_METHOD = `Decide what is missing BEFORE acting on this request, via two probes:

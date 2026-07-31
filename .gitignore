@@ -1,0 +1,4 @@
+# Eval run artifacts — reproducible by re-running; the durable findings live in
+# evals/RESULTS-2nd.md and the design record under docs/.
+evals/out/
+evals/*.log

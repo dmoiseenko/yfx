@@ -35,9 +35,18 @@ exactly where you're most invested, and you can't feel it from inside.
 > 1. **Blind spots** — assumptions, framings, or whole axes that NEITHER party voiced, outside their
 >    option set. Ranked most load-bearing first, at most 4, specific to THIS plan. Drop anything
 >    generic enough to apply to any plan.
-> 2. **Verdict** — exactly one of: `proceed` (sound as-is), `adjust` (fix a named blind spot first),
->    or `don't-build` (the honest answer is this shouldn't be done — say why). Desirability counts:
->    a fully-specified plan can still be the wrong thing to build.
+> 2. **Verdict** — exactly one of: `proceed` (sound as-is — blind spots, if any, are notes, not
+>    blockers), `adjust` (a named blind spot must be resolved BEFORE this step), or `don't-build`
+>    (the honest answer is this shouldn't be done — say why). Desirability counts: a fully-specified
+>    plan can still be the wrong thing to build.
+>
+> A false `adjust` is not free: every verdict spends the user's finite attention, and blocking a
+> sound plan is a real cost. `proceed` is a full-value verdict, not a failure to find something —
+> a sound plan with merely noteworthy blind spots gets `proceed`, with the blind spots as notes.
+> The bar for `adjust` is NOT "the plan could fail." It is two-part: this blind spot would
+> plausibly CHANGE the decision if surfaced, and the step is costly enough to reverse that acting
+> first locks the mistake in. Decision-changing AND hard to undo → `adjust`; anything else is a
+> note under `proceed`.
 >
 > For each blind spot: the unspoken assumption (one line) / the failure it hides / the question they
 > should be asking but aren't. Do not validate the plan — your value is only in what they cannot see.

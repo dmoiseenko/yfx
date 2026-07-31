@@ -72,7 +72,8 @@ compose into one move: reposition the framework around the independent lens.
    - **The durable asset is independence-as-architecture**, not "this probe won." x/y also stops
      being redundant off the frontier model, so it stays as the always-on floor.
    - **Open before crowning `/2nd`:** it was promoted on n=1. It needs its own hit / false-alarm
-     A/B — the same bar x/y was held to — before it headlines.
+     A/B — the same bar x/y was held to — before it headlines. **PAID 2026-07-31** — see the
+     update below and [`evals/RESULTS-2nd.md`](../evals/RESULTS-2nd.md).
 2. **`/2nd` — a "second opinion" command.** The fresh-lens made dead-simple: before an irreversible
    step, spawn a fresh cold agent to red-team the current plan. Shipped (`skills/2nd/SKILL.md`).
 3. **A "kill / not-worth-building" verdict.** Give the framework a terminal for "the honest answer
@@ -112,6 +113,51 @@ New conceptual thread in [`docs/nature-of-f.md`](nature-of-f.md). Two moves wort
 - **Status: argument only, n=0.** It *predicts* `g` adds non-redundant value — exactly what the
   still-owed `/2nd` hit/false-alarm A/B must show. `combine` is undefined (assumes user attention,
   caveat #2). Doesn't touch the reachability / null-terminal gap (caveat #3).
+
+## Update 2026-07-31 — the `/2nd` A/B is paid; two decisions it contradicts
+
+Built `evals/second-opinion.mjs` + `second-dataset.jsonl`: 8 plans from this repo's own design
+record, captured **before** the irreversible step, 6 with a materialized core flaw + 2 controls,
+scored by a hindsight referee blind to arm identity. Four arms on the **shipped** mandate: A
+self-audit *with manufactured in-context stake* (defend first, then audit — this fixes the
+"neither arm had real stake" flaw of the earlier subprocess UU test), B cold + distillate (`/2nd`
+as shipped), C cold + the author's full rationale, D = B on a weaker model. Full numbers and
+caveats: [`evals/RESULTS-2nd.md`](../evals/RESULTS-2nd.md).
+
+- **`/2nd` earns its keep.** Arm B catches the core materialized flaw in **83%** of flawed samples
+  (k=3), stable across three mandate revisions. The debt above is paid.
+- **Independence confirmed as the mechanism.** Cold arms beat the invested self-audit on
+  core-recall in every run (83–94% vs 72%), and A's misses landed on the *identity-threatening*
+  cases — exactly where the theory predicts self-audit fails. This is the first evidence for
+  `g` in `y ≈ combine(f(x), g(x))` ([[nature-of-f]] was n=0); the frame now has one result under it.
+- **Model diversity adds nothing** beyond cold context (D trails B everywhere).
+
+**Contradicted decision #1 — the verdict channel was broken, now fixed.** Unplanned finding: on
+the v1 mandate there were **zero `proceed` verdicts in 24 samples**, including on sound control
+plans. "Assume it may be wrong / do not validate" burned out the true negative, so `/2nd` *always*
+spent user attention — compounding caveat #2. Two rewrites: v2 ("you would bet the plan fails")
+over-corrected — arms caught the core flaw and still said `proceed`. v3 ships the working bar:
+**decision-changing AND costly to reverse**. Result: stable `proceed`×3 from both cold arms on the
+clean control, paid for with flawed-case verdict accuracy 100% → 89%. The cost is partly nominal —
+the downgraded samples still *surfaced* the blind spot, only the label demoted.
+
+**Contradicted decision #2 — "don't prime the lens" is unsupported.** `skills/2nd/SKILL.md` step 2
+says not to hand the fresh agent your reasoning ("that infects the lens"). Arm C does exactly that
+and is B's equal or better (v1 B>C, v2 B=C, v3 C>B — a coin flip across runs). What is load-bearing
+is **who audits (cold vs invested)**, not what they are told. **Left in the skill unchanged** — the
+data says "no evidence priming hurts", which is not the same as "priming helps", and n is small.
+Recorded here so it is not treated as validated. Resolving it needs a larger dataset.
+
+**New open threads from this work:**
+- **One control is not a control.** `control-extract`'s "no problem materialized" rests on an
+  observation window of *days*; the referee scores "n=1 may not generalize" as `empty` only because
+  nothing has surfaced yet. False-alarm measurement effectively rests on the single `control-hooks`
+  row. Needs controls with a real observation window.
+- **All 8 cases are meta** (plans about this framework). Transfer to ordinary engineering plans
+  is untested — the same n=1 caveat the README carries, one level up.
+- **The referee is an LLM.** Generic criticism can pattern-match a real flaw; this inflates all
+  arms equally, so only *between-arm* comparison is robust. A user-labeled tier is the gold
+  standard here too (same as Open UU #4).
 
 **Other threads:**
 - **Not installed anywhere active.** The framework currently only works when running Claude
