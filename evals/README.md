@@ -62,6 +62,30 @@ nouns were neutralized for public release.
 - `prior_claim` — the label the old self-referential score rested on. Used **only** for echo
   detection; never shown to the classifier or the labeler.
 
+## second-opinion.mjs — /2nd hit/false-alarm A/B + independence ablation
+
+The debt recorded in `docs/open-threads.md`: `/2nd` was promoted on n=1 and owes the same bar
+x/y was held to. One dataset (`second-dataset.jsonl`) answers two questions at once:
+
+- **Does /2nd work?** 8 real plans from this framework's own design record, captured at the
+  moment before the irreversible step, each with a hindsight `resolution` (6 whose core flaw
+  later materialized + 2 clean controls). Objections are scored hit / known / empty / open by a
+  hindsight referee blind to arm identity; controls exist so false alarms cost something.
+- **Why does it work?** Four arms, same shipped mandate: **A** self-audit with manufactured
+  in-context stake (defend first, then audit — fixes the "no real stake" flaw of the earlier
+  subprocess UU test), **B** cold + neutral distillate (/2nd as shipped), **C** cold + the
+  author's full rationale (separates no-priors from no-stake; tests the "don't prime the lens"
+  rule), **D** arm B on a different model (does model diversity add beyond fresh context?).
+
+```bash
+node second-opinion.mjs                      # 8 cases x (5 audit + 4 judge) claude -p calls
+MODEL=sonnet OTHER_MODEL=haiku node second-opinion.mjs
+```
+
+Caveats are in the script header; the big one: an LLM referee can pattern-match generic
+criticism ("your validation is circular") onto a real flaw, which inflates all arms equally —
+so the between-arm comparison is the robust readout, absolute hit rates less so.
+
 ## Known scoring nuance
 
 `score.mjs` uses strict equality. For routing, a classifier answer of `both` on a `y`-labeled move
