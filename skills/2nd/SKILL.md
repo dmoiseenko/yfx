@@ -52,6 +52,15 @@ exactly where you're most invested, and you can't feel it from inside.
 > should be asking but aren't. Do not validate the plan — your value is only in what they cannot see.
 > Output the verdict, then the ranked blind spots.
 
+## Known limitation — the verdict skews to `adjust`
+
+Measured on a held-out set of 12 real engineering plans: the cold arm caught the core flaw in 67%
+of flawed plans, but returned `proceed` on only 3 of 24 samples across 8 **sound** plans. The bar
+below ("decision-changing AND costly to reverse") is stated in terms a thorough auditor can nearly
+always satisfy, because real plans always have open axes. So read an `adjust` as *"here is the axis
+you did not voice"* — not as *"this plan is not ready."* The blind spots are the product; the
+verdict is not yet calibrated enough to gate on. Numbers and protocol: [`evals/RESULTS-transfer.md`](../../evals/RESULTS-transfer.md).
+
 ## Then
 
 - **proceed** → go, with the blind spots noted.

@@ -13,6 +13,10 @@ const pexec = promisify(execFile);
 export const ROOT = dirname(fileURLToPath(import.meta.url));
 export const REPO = dirname(ROOT);
 export const MODEL = process.env.MODEL || "sonnet";
+// Per-call ceiling. 90s suits the short synthetic prompts; datasets with long
+// real-world case text need more, or every call burns its retries on timeouts
+// and the run stalls without erroring.
+const CALL_TIMEOUT = Number(process.env.CALL_TIMEOUT || 90000);
 
 export function readDataset(taskFilter) {
   const raw = readFileSync(join(ROOT, "dataset.jsonl"), "utf8").trim().split("\n");
@@ -34,7 +38,7 @@ export async function claude(prompt, model = MODEL) {
       const { stdout } = await pexec(
         "claude",
         ["-p", prompt, "--model", model, "--strict-mcp-config", "--mcp-config", '{"mcpServers":{}}'],
-        { maxBuffer: 4e6, timeout: 90000 },
+        { maxBuffer: 4e6, timeout: CALL_TIMEOUT },
       );
       const s = stdout.trim();
       if (s) return s;
