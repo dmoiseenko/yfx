@@ -185,6 +185,42 @@ Results: [`evals/RESULTS-transfer.md`](../evals/RESULTS-transfer.md).
 - `skills/2nd/SKILL.md` carries a "Known limitation" note: read an `adjust` as *"here is the axis
   you did not voice"*, not as *"this plan is not ready"*. The mandate itself is unchanged.
 
+## Update 2026-07-31 (latest) — roles split: `g` finds, `f` costs, the user judges
+
+Response to the failure above. Three verdict rewrites failed in a row, and the pattern says the
+problem was never the wording: a thorough auditor can satisfy any severity bar, because real plans
+always have open axes — and severity needs reversal cost, stakes and schedule, which a cold agent
+cannot see **by construction**. `g` was being asked for a judgment its own independence denies it
+the inputs for.
+
+So `/2nd` no longer issues a verdict:
+
+- **`g` finds.** Ranked unvoiced axes, each with `changes_if_true` (what would concretely differ),
+  explicitly forbidden to rate severity or say whether to proceed. The "should this exist at all"
+  axis is named as a finding when the plan takes its own desirability for granted.
+- **`f` supplies what `g` lacks** — applicability (with a checkable reason) and cost now vs cost
+  late. Explicitly **not** importance: that is where `f`'s documented delivery drift
+  ([[mode-detector]]) hides.
+- **The user adjudicates**, and only where the two disagree. `f` must always escalate an axis it
+  cannot dismiss with evidence, and must *always* escalate "should this be done at all" — it is the
+  party with the least standing to close that one.
+
+**This is the first concrete definition of `combine`** ([[nature-of-f]], updated). The two halves
+carry opposite biases — `g` toward "everything blocks" (88%, measured), `f` toward "nothing blocks"
+— so spending user attention only on the disagreement is what makes it affordable against caveat #2.
+
+**The `don't-build` terminal moved rather than vanished.** It is now a user outcome reached through
+escalation, not a verdict `g` issues. Open UU #3 stays addressed, but by a party that can actually
+see the stakes.
+
+**Status: unvalidated, twice over.** The reconciliation half has never been measured, *and* the
+finding half's 67% was measured on the previous mandate — this one drops the verdict and adds a
+field, so that number does not carry over. Both need a **further held-out set**;
+`PROTOCOL-transfer.md` forbids re-scoring this revision on the transfer data, and doing it anyway
+would be the fourth instance of the failure that caused the redesign. The harness now runs
+verdict-free (verdict columns drop out rather than printing a misleading 0%) and still scores older
+verdict-bearing mandates, so the recorded runs stay reproducible.
+
 **New open threads from this work:**
 - **One control is not a control.** `control-extract`'s "no problem materialized" rests on an
   observation window of *days*; the referee scores "n=1 may not generalize" as `empty` only because

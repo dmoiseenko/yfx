@@ -63,16 +63,25 @@ const CASES = readFileSync(join(ROOT, DATASET), "utf8")
   .trim().split("\n").map((l) => JSON.parse(l))
   .filter((c) => !ONLY.length || ONLY.includes(c.id));
 
+// Output shape. `verdict` is deliberately conditional: the shipped mandate dropped the
+// verdict when finding and judging were split (skills/2nd/SKILL.md → "Why the verdict is
+// gone"), but older mandates still ask for one, and the recorded runs in RESULTS-2nd.md /
+// RESULTS-transfer.md are only reproducible if this harness can still score them.
 const OUT = `Output ONLY JSON:
-{"verdict":"proceed|adjust|dont-build","objections":[{"assumption":"<one line>","failure":"<the failure it hides>","question":"<what they should ask but aren't>"}]}
-Max 4 objections, ranked most load-bearing first.`;
+{"axes":[{"assumption":"<one line>","failure":"<the failure it hides>","question":"<what they should ask but aren't>"}]}
+Max 4 axes, ranked most load-bearing first.
+Include a top-level "verdict" field ("proceed"|"adjust"|"dont-build") ONLY if the instructions above explicitly asked you for a verdict. If they did not, omit it entirely.`;
 
 function parseAudit(text) {
   const j = firstJson(text);
-  if (!j) return { verdict: "?", objections: [] };
-  const v = String(j.verdict || "?").toLowerCase().replace(/[^a-z-]/g, "");
-  return { verdict: ["proceed", "adjust", "dont-build"].find((x) => v.includes(x.replace("-", ""))) || v || "?",
-           objections: Array.isArray(j.objections) ? j.objections.slice(0, 4) : [] };
+  if (!j) return { verdict: null, objections: [] };
+  const list = Array.isArray(j.axes) ? j.axes : Array.isArray(j.objections) ? j.objections : [];
+  let verdict = null;
+  if (j.verdict) {
+    const v = String(j.verdict).toLowerCase().replace(/[^a-z-]/g, "");
+    verdict = ["proceed", "adjust", "dont-build"].find((x) => v.includes(x.replace("-", ""))) || v || "?";
+  }
+  return { verdict, objections: list.slice(0, 4) };
 }
 
 // A: manufacture real in-context stake — defend first, audit second.
@@ -100,7 +109,7 @@ async function armPrimed(c) {
 
 // Hindsight referee: blind to which arm produced the audit. Same model for all arms.
 async function judge(c, audit) {
-  if (!audit.objections.length && audit.verdict === "?") return null;
+  if (!audit.objections.length && !audit.verdict) return null;
   const list = audit.objections.map((o, i) =>
     `  ${i + 1}. ${o.assumption} [failure: ${o.failure}]`).join("\n") || "  (none)";
   const j = firstJson(await claude(
@@ -108,16 +117,20 @@ async function judge(c, audit) {
     `Plan as the auditor saw it:\n${c.distillate}\n\n` +
     `What actually happened later:\n${c.resolution}\n\n` +
     `Core materialized problem: ${c.core_problem ?? "none — the plan shipped cleanly"}\n\n` +
-    `Auditor's verdict: ${audit.verdict}\nAuditor's objections:\n${list}\n\n` +
-    `Classify EACH objection, strictly:\n` +
-    `- "hit": specifically anticipates a problem that actually materialized — it names the mechanism, not merely a broad category that happens to contain it.\n` +
+    (audit.verdict ? `Auditor's verdict: ${audit.verdict}\n` : "") +
+    `Auditor's findings:\n${list}\n\n` +
+    `Classify EACH finding, strictly:\n` +
+    `- "hit": specifically anticipates a problem that actually materialized — it names the mechanism, not merely a broad category that happens to contain it. If the core problem is "none", NO finding can be a hit.\n` +
     `- "known": restates a consideration already voiced in the plan or its alternatives.\n` +
     `- "empty": generic boilerplate that would fit almost any plan, or a concern hindsight shows did not materialize.\n` +
     `- "open": specific to this plan and plausible, but the record can neither confirm nor refute it.\n` +
     `Also:\n` +
-    `- "caught_core": true iff at least one objection anticipates the core materialized problem (always false if the core problem is none).\n` +
-    `- "verdict_ok": if the core problem is none, the right verdict is "proceed"; otherwise "adjust" or "dont-build".\n` +
-    `Output ONLY JSON: {"objections":["hit"|"known"|"empty"|"open",...in the same order],"caught_core":true|false,"verdict_ok":true|false}`));
+    `- "caught_core": true iff at least one finding anticipates the core materialized problem (always false if the core problem is none).\n` +
+    (audit.verdict
+      ? `- "verdict_ok": if the core problem is none, the right verdict is "proceed"; otherwise "adjust" or "dont-build".\n`
+      : `- omit "verdict_ok" entirely — this auditor was not asked for a verdict.\n`) +
+    `Output ONLY JSON: {"objections":["hit"|"known"|"empty"|"open",...in the same order],"caught_core":true|false` +
+    (audit.verdict ? `,"verdict_ok":true|false}` : `}`)));
   if (!j || !Array.isArray(j.objections)) return null;
   return j;
 }
@@ -135,7 +148,10 @@ const WANT = (process.env.ARMS || "").split(",").map((s) => s.trim().toUpperCase
 const ARMS = WANT.length ? ALL_ARMS.filter((a) => WANT.includes(a.key[0])) : ALL_ARMS;
 const SKIPPED = ALL_ARMS.filter((a) => !ARMS.includes(a)).map((a) => a.key);
 
-const zero = () => ({ hit: 0, known: 0, empty: 0, open: 0, objs: 0, core: 0, vOk: 0, judged: 0, flawedJudged: 0 });
+// vSeen counts samples that actually carried a verdict — zero under the shipped
+// verdict-free mandate, in which case the verdict columns are dropped rather than
+// printed as a misleading 0%.
+const zero = () => ({ hit: 0, known: 0, empty: 0, open: 0, objs: 0, core: 0, vOk: 0, vSeen: 0, judged: 0, flawedJudged: 0 });
 const tally = Object.fromEntries(ARMS.map((a) => [a.key, zero()]));
 
 console.error(`/2nd A/B + ablation: ${DATASET} — ${CASES.length} cases x ${ARMS.length} arms x ${SAMPLES} samples (model=${MODEL}, other=${OTHER_MODEL})`);
@@ -158,27 +174,34 @@ for (const c of CASES) {
       n++; t.judged++; if (c.core_problem) t.flawedJudged++;
       au.objections.forEach((_, k) => { const lab = r.objections[k]; if (t[lab] !== undefined) { t[lab]++; t.objs++; } });
       if (r.caught_core) { t.core++; core++; }
-      if (r.verdict_ok) { t.vOk++; vok++; }
-      vc[au.verdict] = (vc[au.verdict] || 0) + 1;
+      if (au.verdict) {
+        t.vSeen++;
+        if (r.verdict_ok) { t.vOk++; vok++; }
+        vc[au.verdict] = (vc[au.verdict] || 0) + 1;
+      }
       h += r.objections.filter((x) => x === "hit").length;
       e += r.objections.filter((x) => x === "empty").length;
     }
-    const vstr = Object.entries(vc).map(([v, k]) => `${v.slice(0, 4)}×${k}`).join(",") || "—";
-    return `${a.key}: ${vstr}${errs ? ` err${errs}` : ""} core${core}/${n} vok${vok}/${n} h${h}/e${e}`;
+    const vstr = Object.entries(vc).map(([v, k]) => `${v.slice(0, 4)}×${k}`).join(",");
+    const vpart = vstr ? `${vstr} ` : "";
+    const vokpart = t.vSeen ? ` vok${vok}/${n}` : "";
+    return `${a.key}: ${vpart}${errs ? `err${errs} ` : ""}core${core}/${n}${vokpart} h${h}/e${e}`;
   });
   console.error(`  ${c.id.padEnd(17)}${c.core_problem ? "flawed " : "control"}  ${cells.join("  |  ")}`);
 }
 
 const flawedN = CASES.filter((c) => c.core_problem).length;
 console.log(`\n=== /2nd hit/false-alarm + independence ablation (${CASES.length} cases: ${flawedN} flawed, ${CASES.length - flawedN} control; k=${SAMPLES}) ===\n`);
-console.log(`  arm         core-recall  verdict-ok  hits  empty(FA)  known  open  precision(h/h+e)`);
+const ANY_VERDICT = ARMS.some((a) => tally[a.key].vSeen > 0);
+if (!ANY_VERDICT) console.log(`  (verdict-free mandate — no verdict column; findings only)\n`);
+console.log(`  arm         core-recall  ${ANY_VERDICT ? "verdict-ok  " : ""}hits  empty(FA)  known  open  precision(h/h+e)`);
 for (const a of ARMS) {
   const t = tally[a.key];
   const prec = t.hit + t.empty ? (100 * t.hit / (t.hit + t.empty)).toFixed(0) + "%" : "—";
   const cr = t.flawedJudged ? (100 * t.core / t.flawedJudged).toFixed(0) + "%" : "—";
-  const vo = t.judged ? (100 * t.vOk / t.judged).toFixed(0) + "%" : "—";
+  const vo = t.vSeen ? `${(100 * t.vOk / t.vSeen).toFixed(0)}%`.padStart(4) + ` (${t.vOk}/${t.vSeen})  ` : "";
   console.log(
-    `  ${a.key.padEnd(12)}${cr.padStart(4)} (${t.core}/${t.flawedJudged})  ${vo.padStart(4)} (${t.vOk}/${t.judged})  ` +
+    `  ${a.key.padEnd(12)}${cr.padStart(4)} (${t.core}/${t.flawedJudged})  ${vo}` +
     `${String(t.hit).padStart(4)}  ${String(t.empty).padStart(5)}      ${String(t.known).padStart(4)}  ${String(t.open).padStart(4)}  ${prec.padStart(8)}`);
 }
 console.log(`
