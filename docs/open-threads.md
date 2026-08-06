@@ -148,6 +148,43 @@ is **who audits (cold vs invested)**, not what they are told. **Left in the skil
 data says "no evidence priming hurts", which is not the same as "priming helps", and n is small.
 Recorded here so it is not treated as validated. Resolving it needs a larger dataset.
 
+## Update 2026-07-31 (later) — the verdict fix did NOT generalize
+
+Same day, held-out test. The update above reports the verdict channel as fixed by the v3 mandate.
+**On out-of-sample data it is not.** Corrected here rather than left standing.
+
+A live `/2nd` run on the decision to run this cycle returned `adjust`, and its blockers shaped the
+design: composition fixed in advance at 8 sound / 4 flawed (inverting the meta set's 75%-flawed base
+rate), the primary metric switched from core-recall to **false-`adjust` rate**, the decision rule
+written down before sourcing, and cases drawn from **private, unpublished** work so the cold arm
+cannot be scoring by recall of a published ending. Protocol: [`evals/PROTOCOL-transfer.md`](../evals/PROTOCOL-transfer.md).
+Results: [`evals/RESULTS-transfer.md`](../evals/RESULTS-transfer.md).
+
+| arm | core-recall (flawed) | false-`adjust` (sound) |
+| --- | --- | --- |
+| A self | 50% | 79% |
+| B cold (shipped) | 67% | **88%** |
+
+- **The pre-committed rule fires on its first row:** false-`adjust` > 50% ⇒ the verdict channel
+  still fails, v3 did not generalize, and `/2nd` is **not fit as an always-on probe**. Arm B
+  returned `proceed` on 3 of 24 samples across 8 sound plans. Three sound plans drew `adjust` in
+  all three samples from both arms.
+- **Why v3 looked fixed:** it was tuned until it produced `proceed` on the meta set's two controls
+  — one of which was itself unsound (days-long observation window). The bar ("decision-changing AND
+  costly to reverse") is stated in terms a thorough auditor can nearly always satisfy, because real
+  plans always have open axes.
+- **Core-recall 67%** — above the 50% no-transfer floor, below the 70% transfer-supported bar.
+  **Inconclusive on detection, failed on precision.** Reported as such, not spun as partial support.
+- **Independence survives.** B > A on core-recall (67% vs 50%), consistent with every prior run.
+  Verdict *calibration* broke; the cold lens did not. The two claims are separable and one held.
+- **`/2nd` predicted this.** Its second blind spot on this very cycle read: *"the dataset measures
+  recall; the probe's real cost is precision — and the ratio locks at build time."* Second in-vivo
+  win for the independent lens, this time predicting a result rather than catching a framing error.
+- **No re-tuning on this set.** The next mandate revision must be validated on a further held-out
+  set. Tuning and validating on one dataset is the failure this repo has now caught three times.
+- `skills/2nd/SKILL.md` carries a "Known limitation" note: read an `adjust` as *"here is the axis
+  you did not voice"*, not as *"this plan is not ready"*. The mandate itself is unchanged.
+
 **New open threads from this work:**
 - **One control is not a control.** `control-extract`'s "no problem materialized" rests on an
   observation window of *days*; the referee scores "n=1 may not generalize" as `empty` only because

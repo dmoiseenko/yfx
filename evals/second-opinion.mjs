@@ -58,7 +58,8 @@ async function pool(thunks, limit = POOL) {
 // ONLY=id1,id2 re-runs just those cases — used to refill cells lost to an
 // interrupted run (e.g. the host sleeping mid-run kills every call in flight).
 const ONLY = (process.env.ONLY || "").split(",").map((s) => s.trim()).filter(Boolean);
-const CASES = readFileSync(join(ROOT, "second-dataset.jsonl"), "utf8")
+const DATASET = process.env.DATASET || "second-dataset.jsonl";
+const CASES = readFileSync(join(ROOT, DATASET), "utf8")
   .trim().split("\n").map((l) => JSON.parse(l))
   .filter((c) => !ONLY.length || ONLY.includes(c.id));
 
@@ -121,17 +122,25 @@ async function judge(c, audit) {
   return j;
 }
 
-const ARMS = [
+// ARMS=A,B restricts the run to those arms — the ablation (C, D) is answered on the
+// meta dataset, so a transfer run that only needs the shipped arm plus the self-audit
+// baseline can skip them. Any skipped arm is named in the header, never silently dropped.
+const ALL_ARMS = [
   { key: "A self", run: armSelf },
   { key: "B cold", run: (c) => armCold(c) },
   { key: "C primed", run: armPrimed },
   { key: `D ${OTHER_MODEL}`, run: (c) => armCold(c, OTHER_MODEL) },
 ];
+const WANT = (process.env.ARMS || "").split(",").map((s) => s.trim().toUpperCase()).filter(Boolean);
+const ARMS = WANT.length ? ALL_ARMS.filter((a) => WANT.includes(a.key[0])) : ALL_ARMS;
+const SKIPPED = ALL_ARMS.filter((a) => !ARMS.includes(a)).map((a) => a.key);
 
 const zero = () => ({ hit: 0, known: 0, empty: 0, open: 0, objs: 0, core: 0, vOk: 0, judged: 0, flawedJudged: 0 });
 const tally = Object.fromEntries(ARMS.map((a) => [a.key, zero()]));
 
-console.error(`/2nd A/B + ablation: ${CASES.length} cases x ${ARMS.length} arms x ${SAMPLES} samples (model=${MODEL}, other=${OTHER_MODEL})…\n`);
+console.error(`/2nd A/B + ablation: ${DATASET} — ${CASES.length} cases x ${ARMS.length} arms x ${SAMPLES} samples (model=${MODEL}, other=${OTHER_MODEL})`);
+if (SKIPPED.length) console.error(`  arms NOT run this pass: ${SKIPPED.join(", ")}`);
+console.error("");
 
 for (const c of CASES) {
   // Arm×sample chains for one case, throttled; each chain = audit -> judge.

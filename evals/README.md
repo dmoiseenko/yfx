@@ -86,6 +86,28 @@ Caveats are in the script header; the big one: an LLM referee can pattern-match 
 criticism ("your validation is circular") onto a real flaw, which inflates all arms equally —
 so the between-arm comparison is the robust readout, absolute hit rates less so.
 
+## Transfer eval — the held-out set
+
+`second-dataset-transfer.jsonl` (12 decisions from a private, unpublished engineering project;
+genericized) is the **held-out** counterpart to the meta dataset above. It exists because the v3
+`/2nd` mandate was tuned on the 8 meta cases and then scored on those same 8 — partly in-sample.
+
+Composition and the decision rule were committed **before** sourcing, in
+[`PROTOCOL-transfer.md`](PROTOCOL-transfer.md): 8 sound / 4 flawed (inverting the meta set's
+75%-flawed base rate), primary metric = **false-`adjust` rate on sound plans**, labels falling out
+of a forward trace through the project record rather than assigned by the designer.
+
+```bash
+DATASET=second-dataset-transfer.jsonl ARMS=A,B SAMPLES=3 CALL_TIMEOUT=300000 node second-opinion.mjs
+```
+
+`DATASET` picks the file, `ARMS=A,B` restricts which arms run (skipped arms are named in the run
+header, never silently dropped), and `CALL_TIMEOUT` matters here: these cases carry far more text
+than the meta ones, and at the 90s default every call burns its retries on timeouts and the run
+stalls without erroring.
+
+Outcome: the verdict fix **did not generalize** — see [`RESULTS-transfer.md`](RESULTS-transfer.md).
+
 ## Known scoring nuance
 
 `score.mjs` uses strict equality. For routing, a classifier answer of `both` on a `y`-labeled move
