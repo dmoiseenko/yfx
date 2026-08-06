@@ -86,7 +86,17 @@ blind. Both are things you can *build*, not just hope for.
   show ([[open-threads]]). Until then it's a frame, not a finding.
 - **`combine` is undefined.** Who reconciles `f(x)` and `g(x)`, and by what rule, is unspecified —
   it silently assumes user attention to adjudicate, which caveat #2 ([[convergence-protocol]]) says
-  is a finite budget priced at zero.
+  is a finite budget priced at zero. **Update 2026-07-31: first concrete definition, from a
+  failure.** `/2nd` originally had `g` issue a verdict — i.e. `g` doing `combine`'s job. Measured
+  out-of-sample, that verdict blocked 88% of *sound* plans, because severity depends on reversal
+  cost, stakes and schedule, which `g` cannot see by construction: independence denies it exactly
+  the inputs the judgment needs. The roles are now split — `g` names unvoiced axes and what each
+  would change; `f` supplies applicability and cost (facts it can be publicly wrong about, not
+  importance, where its delivery drift hides); the user adjudicates. The two halves carry
+  **opposite** biases — `g` toward "everything blocks" (88%, measured), `f` toward "nothing blocks"
+  (the drift above) — so `combine` spends user attention only where they disagree, which is what
+  makes it affordable against caveat #2. See `skills/2nd/SKILL.md` → *Why the verdict is gone*.
+  Status: argument from a diagnosed failure, unvalidated.
 - **Doesn't touch the reachability premise.** Modeling `f` better doesn't add the missing
   decline/null terminal (caveat #3). An unreachable `y*` is still unreachable; `g`'s job there is to
   *say so*, which is the `don't-build` verdict, not to reach it.
