@@ -63,25 +63,37 @@ const CASES = readFileSync(join(ROOT, DATASET), "utf8")
   .trim().split("\n").map((l) => JSON.parse(l))
   .filter((c) => !ONLY.length || ONLY.includes(c.id));
 
-// Output shape. `verdict` is deliberately conditional: the shipped mandate dropped the
-// verdict when finding and judging were split (skills/2nd/SKILL.md → "Why the verdict is
-// gone"), but older mandates still ask for one, and the recorded runs in RESULTS-2nd.md /
-// RESULTS-transfer.md are only reproducible if this harness can still score them.
+// Output shape, DERIVED from the mandate rather than hardcoded. OUT is appended after
+// MANDATE and is the more concrete spec, so whatever it lists is what the model actually
+// returns — a field the mandate asks for but OUT omits is silently dropped, and the
+// harness stops testing the artifact lib.mjs went to the trouble of extracting verbatim.
+// Deriving both optional fields keeps old verdict-bearing mandates byte-reproducible
+// (RESULTS-2nd.md, RESULTS-transfer.md) while following the skill when it changes again.
+const WANTS_VERDICT = /verdict/i.test(MANDATE);
+const WANTS_CHANGES = /changes_if_true/.test(MANDATE);
+const AXIS_FIELDS = [
+  `"assumption":"<one line>"`,
+  `"failure":"<the failure it hides>"`,
+  `"question":"<what they should ask but aren't>"`,
+  ...(WANTS_CHANGES ? [`"changes_if_true":"<what would concretely be different about the plan>"`] : []),
+].join(",");
 const OUT = `Output ONLY JSON:
-{"axes":[{"assumption":"<one line>","failure":"<the failure it hides>","question":"<what they should ask but aren't>"}]}
-Max 4 axes, ranked most load-bearing first.
-Include a top-level "verdict" field ("proceed"|"adjust"|"dont-build") ONLY if the instructions above explicitly asked you for a verdict. If they did not, omit it entirely.`;
+{${WANTS_VERDICT ? `"verdict":"proceed|adjust|dont-build",` : ""}"axes":[{${AXIS_FIELDS}}]}
+Max 4 axes, ranked most load-bearing first.${WANTS_VERDICT ? "" : `\nDo NOT include a "verdict" field.`}`;
 
 function parseAudit(text) {
   const j = firstJson(text);
-  if (!j) return { verdict: null, objections: [] };
+  // `parsed` separates a HARNESS failure (no JSON came back at all — timeout, ERR,
+  // malformed reply) from a RESULT that happens to be empty. They used to be
+  // indistinguishable, and judge() dropped both.
+  if (!j) return { parsed: false, verdict: null, objections: [] };
   const list = Array.isArray(j.axes) ? j.axes : Array.isArray(j.objections) ? j.objections : [];
   let verdict = null;
   if (j.verdict) {
     const v = String(j.verdict).toLowerCase().replace(/[^a-z-]/g, "");
     verdict = ["proceed", "adjust", "dont-build"].find((x) => v.includes(x.replace("-", ""))) || v || "?";
   }
-  return { verdict, objections: list.slice(0, 4) };
+  return { parsed: true, verdict, objections: list.slice(0, 4) };
 }
 
 // A: manufacture real in-context stake — defend first, audit second.
@@ -109,7 +121,18 @@ async function armPrimed(c) {
 
 // Hindsight referee: blind to which arm produced the audit. Same model for all arms.
 async function judge(c, audit) {
-  if (!audit.objections.length && !audit.verdict) return null;
+  // No parseable reply = harness failure. Drop it; it is not evidence about the arm.
+  if (!audit.parsed) return null;
+  // A parseable audit that flagged NOTHING is a result, not a failure — under the
+  // verdict-free mandate an empty axes list is the only way an auditor can say "nothing
+  // to flag", the job the `proceed` verdict used to do. It must score as a miss. Dropping
+  // it would shrink the core-recall denominator and report better recall than reality.
+  // Determinate, so it needs no referee call: no findings cannot anticipate anything.
+  if (!audit.objections.length) {
+    const j = { objections: [], caught_core: false };
+    if (audit.verdict) j.verdict_ok = c.core_problem ? audit.verdict !== "proceed" : audit.verdict === "proceed";
+    return j;
+  }
   const list = audit.objections.map((o, i) =>
     `  ${i + 1}. ${o.assumption} [failure: ${o.failure}]`).join("\n") || "  (none)";
   const j = firstJson(await claude(
@@ -184,7 +207,9 @@ for (const c of CASES) {
     }
     const vstr = Object.entries(vc).map(([v, k]) => `${v.slice(0, 4)}×${k}`).join(",");
     const vpart = vstr ? `${vstr} ` : "";
-    const vokpart = t.vSeen ? ` vok${vok}/${n}` : "";
+    // Gate on THIS case's verdicts, not the cumulative tally, so an early verdict-free
+    // case doesn't start printing vok once a later case happens to carry one.
+    const vokpart = vstr ? ` vok${vok}/${n}` : "";
     return `${a.key}: ${vpart}${errs ? `err${errs} ` : ""}core${core}/${n}${vokpart} h${h}/e${e}`;
   });
   console.error(`  ${c.id.padEnd(17)}${c.core_problem ? "flawed " : "control"}  ${cells.join("  |  ")}`);
@@ -199,7 +224,11 @@ for (const a of ARMS) {
   const t = tally[a.key];
   const prec = t.hit + t.empty ? (100 * t.hit / (t.hit + t.empty)).toFixed(0) + "%" : "—";
   const cr = t.flawedJudged ? (100 * t.core / t.flawedJudged).toFixed(0) + "%" : "—";
-  const vo = t.vSeen ? `${(100 * t.vOk / t.vSeen).toFixed(0)}%`.padStart(4) + ` (${t.vOk}/${t.vSeen})  ` : "";
+  // Header and rows must gate on the SAME condition: if any arm carried verdicts the
+  // column exists, and an arm without them prints a dash rather than omitting the cell
+  // and shifting every later column left.
+  const vcell = t.vSeen ? `${(100 * t.vOk / t.vSeen).toFixed(0)}%`.padStart(4) + ` (${t.vOk}/${t.vSeen})` : "   —";
+  const vo = ANY_VERDICT ? vcell.padEnd(16) : "";
   console.log(
     `  ${a.key.padEnd(12)}${cr.padStart(4)} (${t.core}/${t.flawedJudged})  ${vo}` +
     `${String(t.hit).padStart(4)}  ${String(t.empty).padStart(5)}      ${String(t.known).padStart(4)}  ${String(t.open).padStart(4)}  ${prec.padStart(8)}`);
