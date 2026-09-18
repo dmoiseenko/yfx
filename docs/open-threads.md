@@ -244,6 +244,46 @@ verdict-bearing mandates, so the recorded runs stay reproducible.
 - **discovery/delivery not wired to a trigger** — the detector exists as an on-demand pass but
   nothing fires it automatically at move-start.
 
+## Update 2026-09-18 — memory decoupled: a provider is prose, not an adapter
+
+**What changed.** The framework no longer retrieves memory. A memory provider is now a **capability
+card** — prose the agent reads (`providers/*.md`, reached via the `skills/memory-provider.md`
+symlink) declaring six axes: tool, query language, citable ids, expansion, scope, auto-injection.
+Cards ship for `mem0` (default), `claude-mem`, and `none`. There is no adapter interface, no
+transport layer, no JS to implement — switching is `npm run provider <name>`.
+
+`hooks/recall-context.mjs` went from 313 lines to 117: the frequency-ranked identifier harvest,
+the transcript scrape, the anchorless-prompt skip, the per-session id dedup and the claude-mem
+HTTP client are gone. What remains is the x/y nudge, which never needed a provider.
+
+**Why — measured, not argued.** `evals/PROTOCOL-memory-provider.md` was registered before data;
+`evals/RESULTS-memory-provider.md` has the run (n=24, gold = identity, queries authored by a
+context-less agent that saw only the memory). A pure-Cyrillic query retrieves the target memory in
+**0/24** cases on claude-mem and **21/24** on mem0 (ratio 0.00 vs 0.88). The premise the harvest
+rested on — "a raw non-English query retrieves ~0%" — is real and **provider-specific**. Keeping
+the workaround in shared code would have hardcoded one provider's defect into the framework.
+
+**What this contradicts, stated rather than slipped past.**
+- The `recall-context` hook's own design rationale (its header argued the harvest was the point).
+- The A/B behind it (+33% diagnostic reasoning, +100% recall intent) was measured on the version
+  that **injected memory**. That result does not transfer to the nudge-only hook that now ships.
+- `PROTOCOL-memory-provider.md`'s decision rule was written to partition *code* between `core/`
+  and `providers/*.mjs`. Prose cards made that framing obsolete mid-run; the amendment at the
+  bottom of that file records it. Thresholds were untouched and both providers landed far outside
+  the inconclusive band, so no judgment call was made after seeing data.
+
+**Newly open.**
+- **The nudge-only hook is unvalidated.** It needs its own A/B; the old one no longer applies.
+- **Card-pull is untested.** The whole design assumes an agent hitting an x-deficit will follow
+  the link and read the card. Pull was chosen over push precisely because #15105 measured that the
+  always-on x/y prompt *suppresses skill invocation* — but that makes compliance the load-bearing
+  assumption, and nothing measures it yet. If agents skip the card, the fallback is worse than the
+  old hardcoding: they will guess a tool name.
+- **claude-mem users lose passive warm-thread retrieval.** They keep the SessionStart digest and
+  `/recall`, and get nothing in between. Not measured as a regression; named as a known cost.
+- **Still n=1 repository.** This removes the cross-provider question from guesswork, not the
+  standing generalizability caveat.
+
 ## What shipped (done)
 
 - `/fresh-lens` skill (detect + audit), mandates embedded.

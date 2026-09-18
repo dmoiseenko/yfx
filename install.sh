@@ -37,7 +37,9 @@ echo "Installing yfx from $REPO into ${DEST/#$HOME/~}"
 mkdir -p "$DEST/skills" "$DEST/hooks"
 
 echo "skills:"
-for item in recall clarify fresh-lens xy-diagnosis.md; do
+# memory-provider.md is itself a symlink into providers/, so the installed link resolves through
+# it back to the active card. 2nd was missing from this list while the skill shipped in the repo.
+for item in recall clarify fresh-lens 2nd xy-diagnosis.md memory-provider.md; do
   link "$REPO/skills/$item" "$DEST/skills/$item"
 done
 
@@ -50,9 +52,15 @@ cat <<EOF
 
 Done. Next steps:
 
-1) Skills work now: /clarify and /fresh-lens are standalone. /recall's memory step
-   needs the claude-mem plugin installed (its search / get_observations tools);
-   without it, /recall degrades to the x/y diagnosis with no retrieval.
+1) Skills work now: /clarify, /fresh-lens and /2nd are standalone. /recall's memory
+   step reads the active provider card (skills/memory-provider.md -> providers/*.md)
+   to learn which tool to call and how to query it. Switch providers with:
+
+     npm run provider            # show active + available
+     npm run provider mem0       # mem0 (default) | claude-mem | none
+
+   "none" is supported, not broken: /recall still runs the diagnosis and falls back
+   to the code, git log, and asking the user.
 
 2) Hooks are OFF by default. To actually run them, add them to $DEST/settings.json:
 
@@ -68,8 +76,10 @@ Done. Next steps:
      }
 
    Then opt in per hook: fresh-lens-trigger needs FRESH_LENS_TRIGGER=1 (or a
-   .claude/fresh-lens.on marker file); see each hook's header for its flag.
-   recall-context also needs the claude-mem worker running.
+   .claude/fresh-lens.on marker file); recall-context needs RECALL_LOOP=1 (or a
+   .claude/recall-loop.on marker). See each hook's header for its flag.
+   recall-context injects only the x/y nudge — it does not retrieve, so it needs
+   no memory provider running.
 
 3) To uninstall: remove the symlinks under $DEST/skills and $DEST/hooks.
 EOF

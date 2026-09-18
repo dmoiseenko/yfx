@@ -1,7 +1,11 @@
 // Unit tests for the deterministic core of the recall-context hook.
-// Run: node --test .claude/hooks/  (or: pnpm test:hooks)
-// These cover the pure logic only — the live claude-mem search is not exercised
-// here (it needs the running claude-mem worker).
+// Run: npm test   (or: node --test hooks/recall-context.test.mjs)
+//
+// The hook no longer retrieves anything — retrieval moved to the provider (which may inject on
+// its own) and to /recall (which composes project-aware terms). So the tests for the harvest
+// machinery (harvestTerms, promptTerms, isNoise, resolveProject) are gone with the code they
+// covered; what remains is the opt-in toggle and the nudge, plus a guard that the hook stays
+// provider-neutral. See the hook header for why the harvest was removed and what that costs.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -9,31 +13,7 @@ import { spawnSync } from "node:child_process";
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import {
-  isNoise,
-  harvestTerms,
-  promptTerms,
-  resolveProject,
-  markerEnabled,
-  isSubstantive,
-} from "./recall-context.mjs";
-
-test("resolveProject strips a git-worktree suffix to the repo name", () => {
-  assert.equal(resolveProject("/home/u/code/myproj/.claude/worktrees/recall-xy"), "myproj");
-  assert.equal(resolveProject("/home/u/code/myproj"), "myproj");
-  assert.equal(resolveProject(""), "");
-});
-
-test("resolveProject prefers CLAUDE_PROJECT_DIR over cwd", () => {
-  const prev = process.env.CLAUDE_PROJECT_DIR;
-  process.env.CLAUDE_PROJECT_DIR = "/x/y/myproj/.claude/worktrees/wt";
-  try {
-    assert.equal(resolveProject("/somewhere/else"), "myproj");
-  } finally {
-    if (prev === undefined) delete process.env.CLAUDE_PROJECT_DIR;
-    else process.env.CLAUDE_PROJECT_DIR = prev;
-  }
-});
+import { markerEnabled, isSubstantive, XY_NUDGE } from "./recall-context.mjs";
 
 test("markerEnabled: main-checkout marker enables the loop from inside a worktree", () => {
   const repo = mkdtempSync(join(tmpdir(), "recall-marker-"));
@@ -63,34 +43,6 @@ test("markerEnabled: a per-worktree marker also enables it locally", () => {
   } finally {
     rmSync(repo, { recursive: true, force: true });
   }
-});
-
-test("isNoise flags command output, the claude-mem digest, and our own injection", () => {
-  assert.equal(isNoise("<command-name>/context</command-name>"), true);
-  assert.equal(isNoise("blah <local-command-stdout> ..."), true);
-  assert.equal(isNoise("Fetch details: get_observations([IDs])"), true);
-  assert.equal(isNoise("Legend: 🎯session"), true);
-  assert.equal(isNoise("[memory] recall auto-search (query: ...)"), true);
-  assert.equal(isNoise("we refactored retry.ts and it got faster"), false);
-});
-
-test("promptTerms keeps Latin identifiers, drops stopwords and Cyrillic, dedups", () => {
-  assert.deepEqual(promptTerms("fix retry.ts perf почему медленно"), ["fix", "retry.ts", "perf"]);
-  assert.deepEqual(promptTerms("the AND for with"), []); // all stopwords
-  assert.deepEqual(promptTerms("MAX_RETRIES max_retries MAX_RETRIES"), ["MAX_RETRIES"]); // case-insensitive dedup
-  assert.deepEqual(promptTerms("спасибо большое"), []); // pure Cyrillic → no anchor
-});
-
-test("harvestTerms keeps recurring terms (freq>=2), drops one-offs, ranks identifiers first", () => {
-  const terms = harvestTerms("retry.ts retry.ts widget widget onceonly");
-  assert.ok(terms.includes("retry.ts"), "recurring identifier kept");
-  assert.ok(terms.includes("widget"), "recurring word kept");
-  assert.ok(!terms.includes("onceonly"), "freq-1 term dropped");
-  assert.equal(terms[0], "retry.ts", "identifier-shaped ranked before plain word");
-});
-
-test("harvestTerms drops stopwords even when frequent", () => {
-  assert.deepEqual(harvestTerms("the the the and and and"), []);
 });
 
 test("isSubstantive gates trivial replies but passes real tasks", () => {
@@ -163,4 +115,27 @@ test("toggle ON via marker file → hook emits without any env var (mid-session 
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+// Regression guard for the provider split: the hook must not name a memory tool or a provider.
+// Which tool exists, and whether it needs English terms, is the provider card's business
+// (providers/*.md via skills/memory-provider.md) — a hook that hardcodes one silently re-couples
+// the framework to that provider.
+test("the nudge stays provider-neutral", () => {
+  for (const leak of ["claude-mem", "mem0", "get_observations", "mem-search", "37777"]) {
+    assert.ok(!XY_NUDGE.includes(leak), `XY_NUDGE must not mention "${leak}"`);
+  }
+  assert.match(XY_NUDGE, /\/recall/, "it should still route to /recall");
+  assert.match(XY_NUDGE, /\/clarify/, "it should still route to /clarify");
+});
+
+test("the hook emits ONLY the nudge — no memory block", () => {
+  const r = runHook({ RECALL_LOOP: "1" });
+  assert.equal(r.status, 0);
+  const out = JSON.parse(r.stdout);
+  assert.equal(
+    out.hookSpecificOutput.additionalContext,
+    XY_NUDGE,
+    "the injection must be exactly the nudge; anything extra means retrieval crept back in",
+  );
 });
