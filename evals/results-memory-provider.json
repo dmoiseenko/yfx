@@ -1,0 +1,67 @@
+{
+  "config": {
+    "N": 24,
+    "SEED": 20260918,
+    "TOP_K": 5,
+    "model": "sonnet",
+    "arms": [
+      "ru_bare",
+      "ru_anchored",
+      "en"
+    ],
+    "ran_at": "2026-09-18T07:38:30.105Z",
+    "rebuilt_from": "out/memory-provider.jsonl"
+  },
+  "providers": [
+    {
+      "provider": "mem0",
+      "ru_bare": {
+        "n": 24,
+        "recall": 0.875,
+        "mrr": 0.7722222222222221,
+        "skipped": 0,
+        "errors": 0
+      },
+      "ru_anchored": {
+        "n": 24,
+        "recall": 0.9166666666666666,
+        "mrr": 0.8541666666666666,
+        "skipped": 0,
+        "errors": 0
+      },
+      "en": {
+        "n": 24,
+        "recall": 1,
+        "mrr": 0.9513888888888888,
+        "skipped": 0,
+        "errors": 0
+      },
+      "ratio": 0.875
+    },
+    {
+      "provider": "claude-mem",
+      "ru_bare": {
+        "n": 24,
+        "recall": 0,
+        "mrr": 0,
+        "skipped": 0,
+        "errors": 0
+      },
+      "ru_anchored": {
+        "n": 24,
+        "recall": 0.4583333333333333,
+        "mrr": 0.22291666666666668,
+        "skipped": 0,
+        "errors": 0
+      },
+      "en": {
+        "n": 24,
+        "recall": 0.7916666666666666,
+        "mrr": 0.38720238095238085,
+        "skipped": 0,
+        "errors": 0
+      },
+      "ratio": 0
+    }
+  ]
+}

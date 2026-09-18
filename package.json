@@ -1,0 +1,11 @@
+{
+  "name": "yfx",
+  "version": "0.1.0",
+  "private": true,
+  "description": "y=f(x) — convergence probes for user/agent collaboration",
+  "scripts": {
+    "test": "node --test hooks/*.test.mjs evals/*.test.mjs",
+    "eval:memory": "node evals/memory-provider.mjs",
+    "provider": "node scripts/use-provider.mjs"
+  }
+}
