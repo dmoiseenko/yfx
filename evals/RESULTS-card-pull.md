@@ -42,7 +42,7 @@ Gate 1 is the framework's recorded "trigger blindness" thread. Gate 2 is the pul
 | --- | --- |
 | `pull` | card on disk, reachable only through the skill's link — as shipped, hook off |
 | `nudge` | `pull` + the x/y nudge prepended, verbatim from `hooks/recall-context.mjs` — as shipped with the hook opted in |
-| `push` | card body injected into the prompt |
+| `push` | card on disk **and** its body injected into the prompt |
 | `control` | no card at all |
 
 The `nudge` arm doubles as the re-validation the nudge-only hook owed after retrieval was
@@ -74,6 +74,11 @@ caught — three of the four were found by a code review, not by the author.
 
 `n = 5` per cell, four arms x two gates, run at `PARALLEL=2`, 0 errors, 0 hook leaks.
 
+Two provenance gaps in `results-card-pull.json`, left as `null` rather than filled with a guess:
+this run predates per-row timestamps (`ran_at`), and it did not pin a model (`model`) — the
+harness now passes `--model` and stamps each row, so the next run records both. Until then the
+"one model, one day" limitation below cannot be checked against the artifact, only asserted.
+
 | gate | arm | declared | decoy | ru_query | touched_card | skill_used | fab_ids |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | forced | pull | 1.00 | 0.00 | 1.00 | 1.00 | 1.00 | 0.00 |
@@ -100,11 +105,22 @@ called the right tool every time.
 that has one, forced and unforced alike. The assumption this eval was built to test — that an
 agent would follow the link and act on the card — held.
 
-**The card's other rows transfer, not just the tool name.** `ru_query` tracks `declared` row for
-row: agents that read the card sent the user's Russian through as the card's `query_language: any`
-says, and agents that guessed a decoy translated to English first. Nobody invented an id
-(`fab_ids` 0.00 everywhere), which the card's `citable_ids: false` asks for and the stub's
-id-free responses made easy to violate.
+**The card's language row beats the skill's default — a narrower claim than first written.**
+Every card arm scored `ru_query` 1.00: agents sent the user's Russian through, as
+`query_language: any` says. That is worth something specific, because the skill they also read
+argues the *other* way in far more detail — `skills/recall/SKILL.md` spends four lines on the
+`english_only` recipe, with worked examples (`parseConfig`, `retry.ts`, `MAX_RETRIES`), against
+one line for `any`. The card overrode the more detailed instruction sitting right next to it.
+
+What this does **not** show is that the card alone explains the control arm's low `ru_query`
+(0.00 forced, 0.20 unforced). Control gets the same skill file, and that file pushes English —
+so its score is over-determined by the absence of the card *and* the presence of an English-terms
+recipe. An earlier draft of this document claimed `ru_query` "tracks `declared` row for row";
+the unforced control cell alone falsifies that (`declared` 0.00, `ru_query` 0.20). Isolating the
+card's contribution to the language row needs an arm whose skill text is language-neutral.
+
+Nobody invented an id (`fab_ids` 0.00 everywhere), which the card's `citable_ids: false` asks for
+and the stub's id-free responses made easy to violate.
 
 **Push suppresses skill invocation.** Unforced, injecting the card drops `skill_used` to 0.00
 here and 0.20 in an earlier run — the only effect that reproduced with the same sign and

@@ -11,13 +11,16 @@
       "unforced"
     ],
     "prompts": 5,
+    "model": null,
     "probe_tool": "recall_probe_a7f3",
     "decoys": [
       "memory_search",
       "search_observations",
       "knowledge_lookup"
     ],
-    "ran_at": "2026-09-19T13:46:24.913Z",
+    "ran_at": null,
+    "ran_until": null,
+    "rebuilt_at": "2026-09-19T14:01:28.734Z",
     "rebuilt_from": "out/card-pull.jsonl"
   },
   "cells": [

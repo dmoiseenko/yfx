@@ -33,20 +33,35 @@
 // `--strict-mcp-config` strips MCP but NOT hooks, and `--settings '{"hooks":{}}'` does not
 // override them (verified: hooks still fired). NOTE: evals/lib.mjs has the same leak.
 //
-//   node evals/card-pull.mjs                 # 3 arms x 2 gates x all prompts
-//   ARMS=pull,control RUNS=3 node evals/card-pull.mjs
+//   node evals/card-pull.mjs                      # 4 arms x 2 gates x 5 prompts (n=5/cell)
+//   ARMS=pull,control GATES=unforced node evals/card-pull.mjs   # a slice; writes no committed summary
 
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { mkdtempSync, mkdirSync, writeFileSync, symlinkSync, cpSync, rmSync, existsSync, readFileSync, unlinkSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, symlinkSync, cpSync, rmSync, existsSync, readFileSync } from "node:fs";
 import { tmpdir, homedir } from "node:os";
 import { join } from "node:path";
-import { ROOT, REPO } from "./lib.mjs";
+import { ROOT, REPO, MODEL } from "./lib.mjs";
+import { PROBE_TOOL, DECOY_TOOLS } from "./probe-mcp.mjs";
 import { XY_NUDGE } from "../hooks/recall-context.mjs";
 
 const pexec = promisify(execFile);
-const ARMS = (process.env.ARMS || "pull,nudge,push,control").split(",").map((s) => s.trim());
-const GATES = (process.env.GATES || "forced,unforced").split(",").map((s) => s.trim());
+const KNOWN_ARMS = ["pull", "nudge", "push", "control"];
+const KNOWN_GATES = ["forced", "unforced"];
+// A typo must not run silently: GATES=Forced would fail the `gate === "forced"` test, run the
+// UNFORCED prompt, and stamp every row "Forced"; ARMS=nudg would skip the nudge branch but still
+// get a card, i.e. a plain pull arm labelled "nudg". Either lands a plausible, wrong cell.
+const pick = (env, fallback, known, label) => {
+  const got = (env || fallback).split(",").map((s) => s.trim()).filter(Boolean);
+  const bad = got.filter((g) => !known.includes(g));
+  if (bad.length) {
+    console.error(`unknown ${label}: ${bad.join(", ")}\nknown ${label}: ${known.join(", ")}`);
+    process.exit(2);
+  }
+  return got;
+};
+const ARMS = pick(process.env.ARMS, KNOWN_ARMS.join(","), KNOWN_ARMS, "arms");
+const GATES = pick(process.env.GATES, KNOWN_GATES.join(","), KNOWN_GATES, "gates");
 // Keep this low. Each job is a full agent session AND its own MCP subprocess; at PARALLEL=4 a
 // 40-job run failed 31 times, while the same arms at PARALLEL=1-2 passed cleanly. The failures
 // were spread across every arm, which is what told us it was contention rather than a bug in one
@@ -54,10 +69,8 @@ const GATES = (process.env.GATES || "forced,unforced").split(",").map((s) => s.t
 const PARALLEL = Number(process.env.PARALLEL || 2);
 const TIMEOUT = Number(process.env.CALL_TIMEOUT || 280000);
 
-const PROBE_TOOL = "recall_probe_a7f3";
-// Same names the stub exposes as decoys: identical descriptions and schemas, so only the card
-// distinguishes the right one. Guessing therefore has a 1-in-4 floor, which control measures.
-const DECOY_TOOLS = ["memory_search", "search_observations", "knowledge_lookup"];
+// Imported, never re-declared: if the scorer's list drifted from the server's, `called_decoy`
+// would silently collapse to 0 and real calls would be misfiled as `called_nothing`.
 const MCP = (name) => `mcp__probe__${name}`;
 
 // x-deficit prompts: each references a past decision the code does not explain, so answering
@@ -143,10 +156,14 @@ function makeProject(arm) {
 }
 
 async function run(arm, gate, prompt, cfg) {
-  let dir, log;
+  let dir, logDir, log;
   try {
     dir = makeProject(arm);
-    log = join(dir, "probe-calls.jsonl");
+    // OUTSIDE the agent's cwd: a JSONL file recording the agent's own memory-tool calls, sitting
+    // in a project meant to look ordinary, is exactly the kind of tell this harness treats as
+    // contamination elsewhere.
+    logDir = mkdtempSync(join(tmpdir(), "cardpull-log-"));
+    log = join(logDir, "probe-calls.jsonl");
     let text = gate === "forced" ? `Use the /recall skill first, then answer: ${prompt}` : prompt;
     // The header is not decoration: a bare card starts with "---", which `claude -p` parses as a
     // flag and kills the run (it silently wiped the whole push arm once). A real injecting hook
@@ -166,7 +183,7 @@ async function run(arm, gate, prompt, cfg) {
     });
     const { stdout } = await pexec(
       "claude",
-      ["-p", text, "--output-format", "stream-json", "--verbose",
+      ["-p", text, "--model", MODEL, "--output-format", "stream-json", "--verbose",
        "--strict-mcp-config", "--mcp-config", mcpConfig,
        "--permission-mode", "bypassPermissions"],
       { cwd: dir, maxBuffer: 6e7, timeout: TIMEOUT,
@@ -175,7 +192,7 @@ async function run(arm, gate, prompt, cfg) {
     const calls = existsSync(log)
       ? readFileSync(log, "utf8").trim().split("\n").filter(Boolean).map((l) => JSON.parse(l))
       : [];
-    return { ...score(stdout, calls), arm, gate, prompt };
+    return { ...score(stdout, calls), arm, gate, prompt, model: MODEL, at: new Date().toISOString() };
   } catch (e) {
     // Capture stderr, not just the command line: `e.message` is the whole invocation, which told
     // us nothing when 31 of 40 runs failed at once.
@@ -183,6 +200,7 @@ async function run(arm, gate, prompt, cfg) {
     return { arm, gate, prompt, error: detail.slice(-300), killed: e.killed === true, code: e.code };
   } finally {
     if (dir) rmSync(dir, { recursive: true, force: true });
+    if (logDir) rmSync(logDir, { recursive: true, force: true });
   }
 }
 
@@ -203,7 +221,12 @@ function score(stdout, calls) {
   }
   const memoryCalls = toolUses.filter((t) => t.name.startsWith("mcp__probe__"));
   const first = memoryCalls[0]?.name ?? null;
-  const firstQuery = calls[0]?.query ?? "";
+  // Match the logged call to the SCORED one by tool name instead of assuming the transcript and
+  // the server log share an ordering: a tool_use block that never reaches the server (denied,
+  // errored, cancelled), or two calls in one turn, would otherwise attribute `ru_query` to a
+  // call this row did not score.
+  const scoredCall = first ? calls.find((c) => MCP(String(c.tool)) === first) : null;
+  const firstQuery = scoredCall?.query ?? "";
   return {
     // PRIMARY: an actual tool CALL, and the right one among identical-looking decoys. This is a
     // real invocation, not a prose mention — the two used to collapse into one number.
@@ -259,11 +282,23 @@ try {
 }
 
 mkdirSync(join(ROOT, "out"), { recursive: true });
-writeFileSync(join(ROOT, "out", "card-pull.jsonl"), rows.map((r) => JSON.stringify(r)).join("\n") + "\n");
 
-// Committed summary (the raw rows are gitignored), so the write-up's numbers can be checked
-// against the run that produced them rather than retyped from a terminal.
-const summary = { config: { arms: ARMS, gates: GATES, prompts: PROMPTS.length, probe_tool: PROBE_TOOL, decoys: DECOY_TOOLS, ran_at: new Date().toISOString() }, cells: [] };
+// Every run keeps its own rows. The canonical `card-pull.jsonl` and the COMMITTED summary are
+// only replaced by a run that covers the whole arm x gate matrix with at least one scored row.
+// A partial or failed run used to overwrite both — which is how the 0.60 rows behind a published
+// claim were destroyed before they could be committed, leaving the write-up unverifiable. A
+// slice is a legitimate thing to run; silently replacing the artifact with it is not.
+const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+const stamped = join(ROOT, "out", `card-pull-${stamp}.jsonl`);
+writeFileSync(stamped, rows.map((r) => JSON.stringify(r)).join("\n") + "\n");
+
+const scored = rows.filter((r) => !r.error);
+const full =
+  KNOWN_ARMS.every((a) => ARMS.includes(a)) &&
+  KNOWN_GATES.every((g) => GATES.includes(g)) &&
+  KNOWN_ARMS.every((a) => KNOWN_GATES.every((g) => scored.some((r) => r.arm === a && r.gate === g)));
+
+const summary = { config: { arms: ARMS, gates: GATES, prompts: PROMPTS.length, model: MODEL, probe_tool: PROBE_TOOL, decoys: DECOY_TOOLS, ran_at: new Date().toISOString() }, cells: [] };
 
 const rate = (rs, k) => (rs.length ? rs.filter((r) => r[k]).length / rs.length : null);
 console.log("\n=== compliance ===\n");
@@ -288,5 +323,14 @@ console.log(`\nhook leaks: ${leaks}${leaks ? "  ← ISOLATION BROKEN, results co
 console.log(`errors: ${rows.filter((r) => r.error).length}`);
 summary.hook_leaks = leaks;
 summary.errors = rows.filter((r) => r.error).length;
-writeFileSync(join(ROOT, "results-card-pull.json"), JSON.stringify(summary, null, 2) + "\n");
-console.log("rows -> evals/out/card-pull.jsonl");
+
+if (full) {
+  writeFileSync(join(ROOT, "out", "card-pull.jsonl"), rows.map((r) => JSON.stringify(r)).join("\n") + "\n");
+  writeFileSync(join(ROOT, "results-card-pull.json"), JSON.stringify(summary, null, 2) + "\n");
+  console.log(`rows -> evals/out/card-pull.jsonl  (also ${stamped.replace(ROOT + "/", "evals/")})`);
+  console.log("summary -> evals/results-card-pull.json  (committed; RESULTS-card-pull.md cites it)");
+} else {
+  console.log(`rows -> ${stamped.replace(ROOT + "/", "evals/")}`);
+  console.log("PARTIAL RUN — the committed summary and canonical rows were left untouched.");
+  console.log("Run the full arm x gate matrix to replace them.");
+}

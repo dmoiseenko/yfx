@@ -300,9 +300,13 @@ can already see proves nothing about having read anything.
   pick. Without a card the agent reaches for `memory_search` systematically.
 - Every arm with a card called the declared tool **1.00**, forced and unforced. The assumption
   the pull design rested on — that an agent follows the link and acts on the card — held.
-- The card's other rows transfer too: `ru_query` tracks `declared` row for row (read the card →
-  queried in Russian as `query_language: any` says; guessed a decoy → translated to English),
-  and nobody invented an id, which `citable_ids: false` asks for.
+- The card's language row beats the skill's default: every card arm scored `ru_query` 1.00,
+  overriding `skills/recall/SKILL.md`, which argues the other way in four lines with worked
+  examples against one line for `any`. **Narrowed after review**: this does NOT show the card
+  alone explains control's low `ru_query`, since control reads the same English-pushing skill —
+  and the unforced control cell (`declared` 0.00, `ru_query` 0.20) falsifies the "row for row"
+  phrasing an earlier draft used. Isolating that needs a language-neutral skill arm.
+- Nobody invented an id, which `citable_ids: false` asks for.
 - **Push suppresses skill invocation**: unforced `skill_used` 0.00 here, 0.20 in an earlier run —
   the only effect that reproduced with the same sign and size. #15105 holds. Push buys the tool
   name and loses the skill carrying the x/y diagnosis and the citation discipline. **Pull beats
