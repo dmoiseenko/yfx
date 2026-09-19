@@ -336,13 +336,56 @@ measured. Budget for an independent review of the harness, not only of the findi
 **Newly open.**
 - **n is too small.** Every cell is 5 runs, and the retraction above is what that buys. Raise n
   before any cell here is cited as a result.
-- **`evals/lib.mjs` has the same ambient-hook leak** and is NOT fixed. Every prior eval —
-  the mode classifier, `/2nd`, the transfer set — ran with the claude-mem digest in the context
-  of a supposedly context-less subprocess. Fixing it is three lines; deciding whether those
-  results need re-running is not, so it is left as an explicit decision rather than folded in.
+- ~~**`evals/lib.mjs` has the same ambient-hook leak**~~ — **fixed and measured**, see the
+  2026-09-19 (later) entry below. The leak was wider than described here, and its cost lands on
+  precision rather than recall.
 - **Synthetic task, one model, one day.** One invented three-file project and five Russian
   x-deficit questions. Nothing here separates a property of the framework from a property of the
   model that ran it.
+
+## Update 2026-09-19 (later) — the harness was leaking the design record into its own blind roles
+
+Issue #14, closed by measurement rather than by assumption. Results: `evals/RESULTS-isolation.md`.
+
+**The leak was wider than the issue described.** Looking for inherited hooks, I found two holes:
+`--strict-mcp-config` strips MCP but not hooks (a claude-mem digest reached the blind agent), and
+`cwd` sat inside this repo, so `CLAUDE.md` auto-discovery handed the subprocess **the yfx project
+guide and gitStatus**. The second is the worse one: the role that `evals/README.md` calls blind
+was reading the design document of the thing it was judging. Asked to list its injected context,
+the subprocess named the project guide, gitStatus and a ~50-observation digest before the fix,
+and `NONE` after.
+
+**What it cost — two paired runs, arm B, k=3, isolation the only variable** (deliberately *not*
+compared against `RESULTS-2nd.md`, whose v3 numbers carry a different mandate — that would
+confound two changes):
+
+| | leak | isolated |
+| --- | --- | --- |
+| core-recall | 67%, 78% | 76%, 76% |
+| hits | 19, 25 | 15, 17 |
+| precision | 63%, 63% | 50%, 59% |
+| **known** | **2, 1** | **13, 15** |
+
+- **Core-recall survives.** The `/2nd`-earns-its-keep headline is not an artifact of the leak,
+  and the isolated measurement is the steadier of the two.
+- **Precision was inflated in both pairs**, and `known` collapsed by an order of magnitude.
+  So the committed `hits`/`empty`/`precision` columns are the suspect ones — which is exactly the
+  channel that decides whether `/2nd` is worth the attention it spends (caveat #2).
+
+**What the design cannot separate, named rather than glossed.** The referee is a `claude()` call
+too, so it leaked as well. The `known` collapse may be a *scoring-side* effect — a referee
+holding the design record judges "already known" differently — not better objections. Both roles
+moved at once. Separating them needs a run that isolates one side only.
+
+That is the third time today a comparison looked clean until a second variable turned up in it
+(after `ru_query` and the nudge arm). The recurring error is not arithmetic; it is **believing an
+arm differs in one respect when it differs in two**.
+
+**Newly open.**
+- Re-run `RESULTS-2nd.md` and `RESULTS-transfer.md` isolated, for the precision columns. Their
+  recall columns do not need it.
+- Isolate the referee and the auditor separately, to attribute the `known` effect.
+- The mode classifier and readiness evals also ran under the leak and are not re-checked at all.
 
 ## What shipped (done)
 

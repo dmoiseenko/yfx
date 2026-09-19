@@ -5,7 +5,8 @@
 
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { readFileSync } from "node:fs";
+import { readFileSync, mkdtempSync, symlinkSync, existsSync, rmSync } from "node:fs";
+import { tmpdir, homedir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
@@ -26,6 +27,43 @@ export function readDataset(taskFilter) {
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+// ISOLATION. `--strict-mcp-config` strips MCP servers but NOT hooks: a subprocess inherits the
+// developer's global settings.json, so every SessionStart / UserPromptSubmit hook fires inside a
+// run this file describes as giving the model "only the information we hand it in the prompt".
+// Measured while building card-pull.mjs: 6 hook events without isolation, 0 with — and a
+// claude-mem SessionStart digest leaked project facts into an agent's answer and changed what it
+// did. `--settings '{"hooks":{}}'` does NOT override inherited hooks (verified).
+//
+// Fix: a scratch config dir with no settings.json. Credentials are SYMLINKED, never copied, so
+// the secret is not duplicated into /tmp.
+//
+// EVAL_ISOLATION=0 restores the old leaky behaviour on purpose — it is how the paired
+// leak-vs-isolated comparison in issue #14 is run. Do not set it for a real measurement.
+const ISOLATE = !/^(0|false|off|no)$/i.test(process.env.EVAL_ISOLATION ?? "");
+let CONFIG_DIR = null;
+function configDir() {
+  if (!ISOLATE) return null;
+  if (CONFIG_DIR) return CONFIG_DIR;
+  CONFIG_DIR = mkdtempSync(join(tmpdir(), "yfx-eval-cfg-"));
+  const creds = join(homedir(), ".claude", ".credentials.json");
+  if (existsSync(creds)) symlinkSync(creds, join(CONFIG_DIR, ".credentials.json"));
+  process.on("exit", () => { try { rmSync(CONFIG_DIR, { recursive: true, force: true }); } catch {} });
+  return CONFIG_DIR;
+}
+
+let SCRATCH_CWD = null;
+function scratchCwd() {
+  if (SCRATCH_CWD) return SCRATCH_CWD;
+  SCRATCH_CWD = mkdtempSync(join(tmpdir(), "yfx-eval-cwd-"));
+  process.on("exit", () => { try { rmSync(SCRATCH_CWD, { recursive: true, force: true }); } catch {} });
+  return SCRATCH_CWD;
+}
+
+// True when a run produced hook events it should not have. Callers that surface it turn a silent
+// contamination into a loud one; this repo has already paid for one dead verdict channel.
+export let HOOK_EVENTS_SEEN = 0;
+export const isolationActive = () => ISOLATE;
+
 // Run a context-less claude -p subprocess (no MCP, no project files) so the only
 // information the model has is what we hand it in the prompt. Retries with backoff
 // so a transient rate-limit/timeout doesn't corrupt a row (that would score as a
@@ -35,10 +73,20 @@ export async function claude(prompt, model = MODEL) {
   for (let attempt = 0; attempt < 3; attempt++) {
     if (attempt) await sleep(2000 * attempt);
     try {
+      const cfg = configDir();
       const { stdout } = await pexec(
         "claude",
         ["-p", prompt, "--model", model, "--strict-mcp-config", "--mcp-config", '{"mcpServers":{}}'],
-        { maxBuffer: 4e6, timeout: CALL_TIMEOUT },
+        {
+          maxBuffer: 4e6,
+          timeout: CALL_TIMEOUT,
+          // cwd matters as much as the config dir: run from inside this repo and CLAUDE.md
+          // auto-discovery hands the "context-less" subprocess the yfx project guide plus
+          // gitStatus. An empty scratch cwd is what actually makes README's "no project files"
+          // true.
+          cwd: cfg ? scratchCwd() : process.cwd(),
+          env: cfg ? { ...process.env, CLAUDE_CONFIG_DIR: cfg } : process.env,
+        },
       );
       const s = stdout.trim();
       if (s) return s;
