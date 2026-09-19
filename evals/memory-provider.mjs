@@ -301,6 +301,10 @@ function summarize(rows) {
   const report = [];
   for (const [pid, rs] of byProvider) {
     const stat = {};
+    // Rows scored in BOTH ru_bare and en — the decision rule reads R as a within-provider,
+    // within-row ratio, so record what it was actually computed over.
+    const usable = (r, arm) => r.arms[arm] && !r.arms[arm].skipped && !r.arms[arm].error;
+    const pairedN = rs.filter((r) => usable(r, "ru_bare") && usable(r, "en")).length;
     for (const arm of ARMS) {
       const scored = rs.filter((r) => r.arms[arm] && !r.arms[arm].skipped && !r.arms[arm].error);
       const hits = scored.filter((r) => r.arms[arm].hit);
@@ -313,9 +317,14 @@ function summarize(rows) {
         errors: rs.filter((r) => r.arms[arm]?.error).length,
       };
     }
+    // `null / 0.79` is 0 in JS, so a fully-skipped or fully-errored ru_bare arm would report
+    // ratio 0 — and check-cards.test.mjs would enforce "english_only" on the card from ZERO
+    // data. That is the exact failure the card check exists to prevent, so guard both sides.
     const ratio =
-      stat.en.recall ? stat.ru_bare.recall / stat.en.recall : null;
-    report.push({ provider: pid, ...stat, ratio });
+      stat.ru_bare.recall === null || !stat.en.recall
+        ? null
+        : stat.ru_bare.recall / stat.en.recall;
+    report.push({ provider: pid, ...stat, ratio, paired_n: pairedN });
   }
   return report;
 }

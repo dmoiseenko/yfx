@@ -36,7 +36,10 @@ so it travels.
 - Keep the framework honest: when you change a probe, check it against its own caveats in `docs/`.
   A change that contradicts a recorded decision must say so and re-argue it, not slip past.
 - Both hooks stay dormant unless explicitly toggled; don't wire them on by default.
-- Nothing outside `providers/` may name a memory provider. A skill or hook that hardcodes one
-  re-couples the framework; route through `skills/memory-provider.md` instead.
+- Nothing outside `providers/` may hardcode a memory provider's **tool or transport**. A skill or
+  hook that does re-couples the framework; route through `skills/memory-provider.md` instead.
+  Naming a provider in *rationale* is fine and sometimes required — `skills/recall/SKILL.md` says
+  which provider each retrieval measurement was taken on, because a number without its provider
+  is the very overreach this layer exists to stop.
 - `npm test` runs the hook unit tests and the card claim-vs-measurement checks. Run it before
   committing a change to a card or a hook.

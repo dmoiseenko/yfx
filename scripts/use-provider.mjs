@@ -7,7 +7,7 @@
 // The card is a symlink so there is exactly one copy of each provider's declaration; switching
 // is a one-line diff, and `npm test` re-checks the new card's claims against measured results.
 
-import { readdirSync, symlinkSync, unlinkSync, readlinkSync, existsSync } from "node:fs";
+import { readdirSync, symlinkSync, unlinkSync, readlinkSync, existsSync, renameSync } from "node:fs";
 import { dirname, join, basename } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -34,6 +34,10 @@ if (!available.includes(want)) {
   console.error(`unknown provider: ${want}\navailable: ${available.join(", ")}`);
   process.exit(1);
 }
-if (existsSync(CARD) || active() !== null) unlinkSync(CARD);
-symlinkSync(join("..", "providers", `${want}.md`), CARD);
+// Atomic: unlink-then-symlink leaves the repo with NO active card if the second step fails,
+// and `npm test` then reports the card as missing rather than as whatever it was before.
+const staged = `${CARD}.staged`;
+if (existsSync(staged)) unlinkSync(staged);
+symlinkSync(join("..", "providers", `${want}.md`), staged);
+renameSync(staged, CARD);
 console.log(`active provider -> ${want}`);

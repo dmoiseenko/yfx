@@ -86,7 +86,10 @@ for (const card of cards) {
     const results = existsSync(RESULTS) ? JSON.parse(readFileSync(RESULTS, "utf8")) : null;
     const measured = results?.providers?.find((p) => p.provider === card.name);
 
-    if (!measured) {
+    // A provider present in the results but with no usable ratio (every row skipped or errored)
+    // is NOT a measurement — treat it exactly like an absent run, or the protocol's "unmeasured"
+    // escape hatch becomes unreachable and no card value can pass.
+    if (!measured || typeof measured.ratio !== "number") {
       assert.equal(
         fm.query_language,
         "unmeasured",
@@ -101,7 +104,6 @@ for (const card of cards) {
     }
 
     const ratio = measured.ratio;
-    assert.ok(typeof ratio === "number", `no ratio measured for ${card.name}`);
 
     const expected =
       ratio >= BRIDGES_AT ? "any" : ratio <= FAILS_AT ? "english_only" : "unmeasured";
@@ -125,7 +127,12 @@ for (const card of cards) {
 test("the active card symlink points at a real provider", () => {
   const link = join(REPO, "skills", "memory-provider.md");
   assert.ok(existsSync(link), "skills/memory-provider.md is missing — run `npm run provider <name>`");
-  const target = basename(readlinkSync(link), ".md");
+  // On a clone with core.symlinks=false (or a `git archive` export) the link materializes as a
+  // regular file containing its target path; readlinkSync would throw EINVAL and fail the suite
+  // with an opaque error instead of the assertion below.
+  let raw;
+  try { raw = readlinkSync(link); } catch { raw = readFileSync(link, "utf8").trim(); }
+  const target = basename(raw, ".md");
   assert.ok(
     cards.some((c) => c.name === target),
     `skills/memory-provider.md points at "${target}", which is not in providers/`,

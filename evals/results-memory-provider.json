@@ -9,7 +9,7 @@
       "ru_anchored",
       "en"
     ],
-    "ran_at": "2026-09-18T07:38:30.105Z",
+    "ran_at": "2026-09-18T08:04:40.878Z",
     "rebuilt_from": "out/memory-provider.jsonl"
   },
   "providers": [
@@ -36,7 +36,8 @@
         "skipped": 0,
         "errors": 0
       },
-      "ratio": 0.875
+      "ratio": 0.875,
+      "paired_n": 24
     },
     {
       "provider": "claude-mem",
@@ -61,7 +62,8 @@
         "skipped": 0,
         "errors": 0
       },
-      "ratio": 0
+      "ratio": 0,
+      "paired_n": 24
     }
   ]
 }
