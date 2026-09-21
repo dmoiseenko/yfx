@@ -42,7 +42,6 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const ISOLATE = !/^(0|false|off|no)$/i.test(process.env.EVAL_ISOLATION ?? "");
 let CONFIG_DIR = null;
 function configDir() {
-  if (!ISOLATE) return null;
   if (CONFIG_DIR) return CONFIG_DIR;
   CONFIG_DIR = mkdtempSync(join(tmpdir(), "yfx-eval-cfg-"));
   const creds = join(homedir(), ".claude", ".credentials.json");
@@ -69,22 +68,35 @@ function scratchCwd() {
 // What is checkable for free is structural, so that is what is offered: whether isolation is on,
 // and where it points. Harnesses print it, which is how a silent regression becomes visible.
 export const isolationActive = () => ISOLATE;
-export function isolationReport() {
-  if (!ISOLATE) return "ISOLATION OFF (EVAL_ISOLATION=0) — inherited hooks and CLAUDE.md are in play";
-  const cfg = configDir();
-  return `isolated: config=${cfg} cwd=${scratchCwd()} (no settings.json, no CLAUDE.md)`;
+// Takes the EFFECTIVE flag, not the module-level default. An earlier version closed over
+// `ISOLATE` while callers labelled its output per role — so a run with `ISOLATE_AUDITOR=0`
+// printed "auditor isolated" one line above "auditor=false". A status line that lies in exactly
+// the runs it was added to describe is worse than no status line.
+// ONE resolver, used by both `claude()` and the status line. Having the caller re-derive the
+// rule is the desync this comment warns about: a status line computed separately from the flag
+// the calls actually use is exactly how the banner came to lie the first time.
+export const resolveIsolate = (opts = {}) => (opts.isolate === undefined ? ISOLATE : !!opts.isolate);
+
+export function isolationReport(label = "", opts = {}) {
+  const tag = label ? `${label}: ` : "";
+  if (!resolveIsolate(opts)) return `${tag}LEAKY — inherited hooks and CLAUDE.md are in play`;
+  return `${tag}isolated: config=${configDir()} cwd=${scratchCwd()} (no settings.json, no CLAUDE.md)`;
 }
 
 // Run a context-less claude -p subprocess (no MCP, no project files) so the only
 // information the model has is what we hand it in the prompt. Retries with backoff
 // so a transient rate-limit/timeout doesn't corrupt a row (that would score as a
 // classifier miss when it's really a harness failure).
-export async function claude(prompt, model = MODEL) {
+export async function claude(prompt, model = MODEL, opts = {}) {
+  // opts.isolate overrides the run-wide default for THIS call. The /2nd harness moves both the
+  // auditor and the referee at once, so a whole-run comparison cannot say which produced an
+  // effect; this is what lets one be held leaky while the other is isolated.
+  const isolate = resolveIsolate(opts);
   let last = "";
   for (let attempt = 0; attempt < 3; attempt++) {
     if (attempt) await sleep(2000 * attempt);
     try {
-      const cfg = configDir();
+      const cfg = isolate ? configDir() : null;
       const { stdout } = await pexec(
         "claude",
         ["-p", prompt, "--model", model, "--strict-mcp-config", "--mcp-config", '{"mcpServers":{}}'],

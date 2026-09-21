@@ -5,9 +5,17 @@
 > this repo put the yfx project guide and `gitStatus` there too. Fixed in `lib.mjs`; measured in
 > [`RESULTS-isolation.md`](RESULTS-isolation.md).
 >
-> What that costs this document: **core-recall is unaffected** (isolated runs were, if anything,
-> steadier), but **hits / empty / precision were inflated** in both paired runs — so treat the
-> precision columns below as an upper bound until they are re-measured. Issue #14 tracks it.
+> What that costs this document is **not directly measured**. The attribution work in
+> [`RESULTS-isolation.md`](RESULTS-isolation.md) ran **arm B only, under the verdict-free
+> mandate**, on the meta dataset — so it does not, by its own Limits, establish anything for the
+> numbers below. What it found there: `core-recall` is unaffected by either role's leak state;
+> the **`known` classification is distorted by the referee**; and `hits` / `empty` / `precision`
+> all moved in the direction of looking better than they are, though none of that separation is
+> established at the available n.
+>
+> Whether those carry over here is the open question, not the finding. Treat the classification
+> columns below as unverified rather than as either sound or refuted. Issue #14 tracks the
+> re-measurement.
 
 
 Run per [`PROTOCOL-transfer.md`](PROTOCOL-transfer.md), whose composition and decision rule were

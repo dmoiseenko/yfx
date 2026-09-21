@@ -50,6 +50,26 @@ before, and `NONE` after.
 issue #14. **Results committed before this fix were produced under the leak** — see
 `RESULTS-2nd.md` and `RESULTS-transfer.md`.
 
+**Per-role isolation.** A whole-run flag moves every role at once, so it cannot say which role an
+effect belongs to — `second-opinion.mjs` runs both an auditor and a hindsight referee, and the
+first comparison moved both. `claude(prompt, model, {isolate})` overrides the run-wide default
+for one call, and `second-opinion.mjs` exposes it per role:
+
+```bash
+ISOLATE_AUDITOR=1 ISOLATE_REFEREE=0 node second-opinion.mjs   # only the scorer leaks
+ISOLATE_AUDITOR=0 ISOLATE_REFEREE=1 node second-opinion.mjs   # only the auditor leaks
+```
+
+Both flags are read by `second-opinion.mjs` **only** — it is the harness with two roles. Setting
+them on `memory-provider.mjs`, `uu-audit.mjs` or the readiness harnesses is silently ignored;
+those follow `EVAL_ISOLATION`.
+
+Unset flags follow `EVAL_ISOLATION`. Every run prints the **effective** state per role, on stdout
+as well as stderr so a redirected run keeps the record — check
+that header before trusting a row; an earlier version printed the run-wide default under a role
+label and so lied in exactly the runs these flags exist for. That 2x2 is what attributed the
+`known` shift to the referee (`RESULTS-isolation.md`).
+
 ## The three numbers
 
 - **classifier vs blind truth** — the honest accuracy of the shipped classifier.

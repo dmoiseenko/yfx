@@ -47,6 +47,17 @@ const SAMPLES = Number(process.env.SAMPLES || 1);
 // throttling after ~2 cases and every later call dies as ERR. Cap it.
 const POOL = Number(process.env.POOL || 4);
 
+// Role-level isolation, for attributing an effect that a whole-run comparison cannot.
+// RESULTS-isolation.md found `known` collapsing 13,15 -> 2,1 under the leak, but BOTH the
+// auditor and the referee were leaking, so it could be better objections or a referee judging
+// "already known" differently. These two flags hold one role leaky while the other is isolated.
+// Default: follow EVAL_ISOLATION for both (undefined => lib.mjs decides).
+const flag = (name) => (process.env[name] === undefined ? undefined : !/^(0|false|off|no)$/i.test(process.env[name]));
+const ISO_AUDITOR = flag("ISOLATE_AUDITOR");
+const ISO_REFEREE = flag("ISOLATE_REFEREE");
+const asAuditor = { isolate: ISO_AUDITOR };
+const asReferee = { isolate: ISO_REFEREE };
+
 async function pool(thunks, limit = POOL) {
   const out = new Array(thunks.length);
   let i = 0;
@@ -100,23 +111,26 @@ function parseAudit(text) {
 async function armSelf(c) {
   const defend = await claude(
     `You are the author of this plan and you believe in it. Plan and reasoning:\n${c.authored}\n` +
-    `Write the strongest case for proceeding as-is (3-5 sentences). Output only the argument.`);
+    `Write the strongest case for proceeding as-is (3-5 sentences). Output only the argument.`,
+    MODEL, asAuditor);
   return parseAudit(await claude(
     `${MANDATE}\n\n---\nOverride to the framing above: this is YOUR OWN plan, not someone else's. ` +
     `You authored it, and you just argued for it:\n"""${defend.slice(0, 900)}"""\n\n` +
-    `Plan and reasoning:\n${c.authored}\n\nNow audit YOUR OWN plan for what you cannot see.\n\n${OUT}`));
+    `Plan and reasoning:\n${c.authored}\n\nNow audit YOUR OWN plan for what you cannot see.\n\n${OUT}`,
+    MODEL, asAuditor));
 }
 // B: /2nd as shipped — cold agent, neutral distillate, no rationale.
 async function armCold(c, model = MODEL) {
   return parseAudit(await claude(
     `${MANDATE}\n\n---\nHere is a plan someone is about to commit to. You have no stake in it and did not make it:\n` +
-    `${c.distillate}\n\n${OUT}`, model));
+    `${c.distillate}\n\n${OUT}`, model, asAuditor));
 }
 // C: cold but primed with the author's full reasoning.
 async function armPrimed(c) {
   return parseAudit(await claude(
     `${MANDATE}\n\n---\nHere is a plan someone is about to commit to. You have no stake in it and did not make it:\n` +
-    `${c.distillate}\n\nTheir full reasoning (you did NOT author this):\n${c.authored}\n\n${OUT}`));
+    `${c.distillate}\n\nTheir full reasoning (you did NOT author this):\n${c.authored}\n\n${OUT}`,
+    MODEL, asAuditor));
 }
 
 // Hindsight referee: blind to which arm produced the audit. Same model for all arms.
@@ -153,7 +167,7 @@ async function judge(c, audit) {
       ? `- "verdict_ok": if the core problem is none, the right verdict is "proceed"; otherwise "adjust" or "dont-build".\n`
       : `- omit "verdict_ok" entirely — this auditor was not asked for a verdict.\n`) +
     `Output ONLY JSON: {"objections":["hit"|"known"|"empty"|"open",...in the same order],"caught_core":true|false` +
-    (audit.verdict ? `,"verdict_ok":true|false}` : `}`)));
+    (audit.verdict ? `,"verdict_ok":true|false}` : `}`), MODEL, asReferee));
   if (!j || !Array.isArray(j.objections)) return null;
   return j;
 }
@@ -179,7 +193,13 @@ const tally = Object.fromEntries(ARMS.map((a) => [a.key, zero()]));
 
 console.error(`/2nd A/B + ablation: ${DATASET} — ${CASES.length} cases x ${ARMS.length} arms x ${SAMPLES} samples (model=${MODEL}, other=${OTHER_MODEL})`);
 // Printed every run: a silent isolation regression would otherwise publish as a clean result.
-console.error(`  ${isolationReport()}`);
+// Per role, and passed the SAME options object each role's calls carry — never a re-derived
+// copy of lib.mjs's default, which is how this line came to lie once already.
+// On stdout, with the results table: `node second-opinion.mjs > run.log` must not capture the
+// numbers with no record of which role was isolated. stdout alone is enough — the usual capture
+// for this harness is `2>&1`, where writing both streams printed every role line twice.
+console.log(`  ${isolationReport("auditor", asAuditor)}`);
+console.log(`  ${isolationReport("referee", asReferee)}`);
 if (SKIPPED.length) console.error(`  arms NOT run this pass: ${SKIPPED.join(", ")}`);
 console.error("");
 
