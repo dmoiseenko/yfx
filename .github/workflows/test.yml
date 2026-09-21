@@ -1,0 +1,41 @@
+name: test
+
+# Why this exists: evals/check-cards.test.mjs is the only thing standing between a provider
+# card's CLAIM and what a run actually MEASURED. Run locally-only, it protects nothing from
+# anyone who edits a card without remembering to run it.
+#
+# Scope is deliberately narrow. The evals themselves (memory-provider, card-pull, second-opinion)
+# spawn `claude -p` subprocesses and cost real inference, so they are NOT run here — they stay
+# manual, and their results are committed as artifacts the tests check against.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      # No dependencies to install: the repo is dependency-free by design, and `npm test` is a
+      # thin wrapper over node's built-in runner.
+      - name: Unit tests and provider-card claim checks
+        run: npm test
+
+      # The card test asserts the symlink resolves, but a clone with core.symlinks=false
+      # materializes it as a regular file — the test has a fallback for that, and this step
+      # makes it visible which of the two CI actually exercised.
+      - name: Report how the active card materialized
+        if: always()
+        run: |
+          if [ -L skills/memory-provider.md ]; then
+            echo "symlink -> $(readlink skills/memory-provider.md)"
+          else
+            echo "regular file (core.symlinks=false), contents: $(cat skills/memory-provider.md)"
+          fi
