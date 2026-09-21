@@ -72,9 +72,14 @@ export const isolationActive = () => ISOLATE;
 // `ISOLATE` while callers labelled its output per role — so a run with `ISOLATE_AUDITOR=0`
 // printed "auditor isolated" one line above "auditor=false". A status line that lies in exactly
 // the runs it was added to describe is worse than no status line.
-export function isolationReport(label = "", isolate = ISOLATE) {
+// ONE resolver, used by both `claude()` and the status line. Having the caller re-derive the
+// rule is the desync this comment warns about: a status line computed separately from the flag
+// the calls actually use is exactly how the banner came to lie the first time.
+export const resolveIsolate = (opts = {}) => (opts.isolate === undefined ? ISOLATE : !!opts.isolate);
+
+export function isolationReport(label = "", opts = {}) {
   const tag = label ? `${label}: ` : "";
-  if (!isolate) return `${tag}LEAKY — inherited hooks and CLAUDE.md are in play`;
+  if (!resolveIsolate(opts)) return `${tag}LEAKY — inherited hooks and CLAUDE.md are in play`;
   return `${tag}isolated: config=${configDir()} cwd=${scratchCwd()} (no settings.json, no CLAUDE.md)`;
 }
 
@@ -86,7 +91,7 @@ export async function claude(prompt, model = MODEL, opts = {}) {
   // opts.isolate overrides the run-wide default for THIS call. The /2nd harness moves both the
   // auditor and the referee at once, so a whole-run comparison cannot say which produced an
   // effect; this is what lets one be held leaky while the other is isolated.
-  const isolate = opts.isolate === undefined ? ISOLATE : !!opts.isolate;
+  const isolate = resolveIsolate(opts);
   let last = "";
   for (let attempt = 0; attempt < 3; attempt++) {
     if (attempt) await sleep(2000 * attempt);

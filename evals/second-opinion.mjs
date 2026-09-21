@@ -38,7 +38,7 @@
 
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { claude, firstJson, shippedSecondMandate, MODEL, ROOT, isolationReport, isolationActive } from "./lib.mjs";
+import { claude, firstJson, shippedSecondMandate, MODEL, ROOT, isolationReport } from "./lib.mjs";
 
 const MANDATE = shippedSecondMandate();
 const OTHER_MODEL = process.env.OTHER_MODEL || "haiku";
@@ -193,15 +193,13 @@ const tally = Object.fromEntries(ARMS.map((a) => [a.key, zero()]));
 
 console.error(`/2nd A/B + ablation: ${DATASET} — ${CASES.length} cases x ${ARMS.length} arms x ${SAMPLES} samples (model=${MODEL}, other=${OTHER_MODEL})`);
 // Printed every run: a silent isolation regression would otherwise publish as a clean result.
-// Per role, from the EFFECTIVE flag each role's calls will use — the whole point of printing it.
-// On BOTH streams: the results table below goes to stdout, so `node second-opinion.mjs > run.log`
-// would otherwise capture the numbers with no record of which role was isolated — the exact
-// failure this line exists to prevent, and one this harness has already shipped once.
-for (const line of [isolationReport("auditor", ISO_AUDITOR ?? isolationActive()),
-                    isolationReport("referee", ISO_REFEREE ?? isolationActive())]) {
-  console.error(`  ${line}`);
-  console.log(`  ${line}`);
-}
+// Per role, and passed the SAME options object each role's calls carry — never a re-derived
+// copy of lib.mjs's default, which is how this line came to lie once already.
+// On stdout, with the results table: `node second-opinion.mjs > run.log` must not capture the
+// numbers with no record of which role was isolated. stdout alone is enough — the usual capture
+// for this harness is `2>&1`, where writing both streams printed every role line twice.
+console.log(`  ${isolationReport("auditor", asAuditor)}`);
+console.log(`  ${isolationReport("referee", asReferee)}`);
 if (SKIPPED.length) console.error(`  arms NOT run this pass: ${SKIPPED.join(", ")}`);
 console.error("");
 

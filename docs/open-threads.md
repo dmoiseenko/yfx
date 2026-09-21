@@ -398,9 +398,11 @@ arm differs in one respect when it differs in two**.
   established** — non-overlap alone is too weak a test at three runs per group, and the same test
   weakens the "precision was inflated" reading of the earlier paired table too. The `known` shift
   is **not** just relabelled from `open`: across all six runs `open` does not separate by the
-  referee. `empty` separates by neither role, and its highest count comes from an
-  *isolated*-auditor run — reported because it cuts against "the leak made everything look
-  better". **`core-recall`
+  referee. `empty` separates by neither role either, but grouped by *auditor* it points the same
+  way as `hits` and `precision` (higher in every isolated run: 12, 15, 22 vs 6, 11, 15 — more
+  false alarms when isolated), so it joins them as not established rather than as a
+  counter-example. An earlier draft read its highest count as cutting against that story; that
+  was an inversion. **`core-recall`
   separates by neither**, which is why the headline survived: whether an auditor caught the core
   problem is robust to both leaks; how its findings get *classified* is not.
 - The mode classifier and readiness evals also ran under the leak and are not re-checked at all.
