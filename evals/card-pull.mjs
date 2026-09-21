@@ -31,7 +31,8 @@
 // hooks inside the eval: a first run had the claude-mem outage digest leak into the agent's
 // answer, which both contaminates the control arm and tells the agent a provider exists.
 // `--strict-mcp-config` strips MCP but NOT hooks, and `--settings '{"hooks":{}}'` does not
-// override them (verified: hooks still fired). NOTE: evals/lib.mjs has the same leak.
+// override them (verified: hooks still fired). `evals/lib.mjs` had the same leak and is
+// now isolated too — see RESULTS-isolation.md for what it cost.
 //
 //   node evals/card-pull.mjs                      # 4 arms x 2 gates x 5 prompts (n=5/cell)
 //   ARMS=pull,control GATES=unforced node evals/card-pull.mjs   # a slice; writes no committed summary

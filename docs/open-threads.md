@@ -384,6 +384,10 @@ arm differs in one respect when it differs in two**.
 **Newly open.**
 - Re-run `RESULTS-2nd.md` and `RESULTS-transfer.md` isolated, for the precision columns. Their
   recall columns do not need it.
+- **`RESULTS-memory-provider.md` was under the leak too and was missed in the first sweep** — the
+  worst omission, since it gates CI and justified deleting 276 lines. Now **re-run isolated**:
+  mem0 R 0.88 → 0.95, claude-mem 0.00 → 0.00 on the identical frozen 24 rows. The conclusion held
+  and the key zero replicated, so the cards stand on an isolated measurement. Closed.
 - Isolate the referee and the auditor separately, to attribute the `known` effect.
 - The mode classifier and readiness evals also ran under the leak and are not re-checked at all.
 

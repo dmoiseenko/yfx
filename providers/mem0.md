@@ -8,10 +8,10 @@ scope: [repo, dir, mine]
 auto_injection: first_prompt
 measured:
   eval: evals/memory-provider.mjs
-  ratio: 0.875
-  recall_ru_bare: 0.875
-  recall_en: 1.0
-  n: 24
+  ratio: 0.9527
+  recall_ru_bare: 0.913
+  recall_en: 0.9583
+  n: 23
 ---
 
 # Memory provider: mem0
@@ -29,8 +29,9 @@ Call `mcp__plugin_mem0_mem0__search_memories` with a direct question. Arguments 
 ## Query in the user's language — this is measured, not assumed
 
 mem0's search **bridges languages**. A pure-Cyrillic question with no Latin token at all still
-retrieved the right memory in 21 of 24 cases (`recall@5` 0.88, against an English ceiling of
-1.00 — ratio **0.88**, `n=24`, `evals/results-memory-provider.json`).
+retrieved the right memory in 21 of 23 scored cases (`recall@5` 0.91, against an English ceiling
+of 0.96 — ratio **0.95**, `evals/results-memory-provider.json`). A leakier earlier run of the
+same eval put the ratio at 0.88; isolating the harness moved it up, not down.
 
 So **do not spend a turn translating the user's request into English identifiers before
 searching.** Ask mem0 the question as the user framed it. The English arm is only marginally

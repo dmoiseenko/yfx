@@ -7,7 +7,7 @@
 // The card is a symlink so there is exactly one copy of each provider's declaration; switching
 // is a one-line diff, and `npm test` re-checks the new card's claims against measured results.
 
-import { readdirSync, symlinkSync, unlinkSync, readlinkSync, existsSync, renameSync } from "node:fs";
+import { readdirSync, symlinkSync, unlinkSync, readlinkSync, readFileSync, existsSync, renameSync, rmSync } from "node:fs";
 import { dirname, join, basename } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -20,8 +20,13 @@ const available = readdirSync(DIR)
   .map((f) => basename(f, ".md"))
   .sort();
 
+// readlinkSync throws EINVAL when the card materialized as a REGULAR FILE holding its target —
+// a clone with core.symlinks=false, or a git archive export. Without the fallback this reports
+// "(none)" on such a checkout, and the user switches away from a card that was in fact active.
+// Same fallback check-cards.test.mjs already uses.
 const active = () => {
-  try { return basename(readlinkSync(CARD), ".md"); } catch { return null; }
+  try { return basename(readlinkSync(CARD), ".md"); } catch {}
+  try { return basename(readFileSync(CARD, "utf8").trim(), ".md"); } catch { return null; }
 };
 
 const want = process.argv[2];
@@ -36,8 +41,11 @@ if (!available.includes(want)) {
 }
 // Atomic: unlink-then-symlink leaves the repo with NO active card if the second step fails,
 // and `npm test` then reports the card as missing rather than as whatever it was before.
+// rmSync(force), not existsSync+unlink: existsSync FOLLOWS symlinks, so a leftover .staged link
+// whose target no longer exists reads as absent, the symlinkSync below throws EEXIST, and every
+// later `npm run provider` fails identically until someone deletes the file by hand.
 const staged = `${CARD}.staged`;
-if (existsSync(staged)) unlinkSync(staged);
+rmSync(staged, { force: true });
 symlinkSync(join("..", "providers", `${want}.md`), staged);
 renameSync(staged, CARD);
 console.log(`active provider -> ${want}`);

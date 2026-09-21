@@ -15,12 +15,18 @@ import { ROOT } from "./lib.mjs";
 const rows = readFileSync(join(ROOT, "out", "memory-provider.jsonl"), "utf8")
   .trim().split("\n").map((l) => JSON.parse(l));
 
-const [N = 24, SEED = 20260918, TOP_K = 5, MODEL = "sonnet"] = process.argv.slice(2);
+// Config comes from the CALLER, not from defaults: a rebuild that guessed N=24 for an N=12 run
+// would publish a number the run did not produce — which is what the header promises not to do.
+// Anything not supplied stays null rather than being invented, and `ran_at` is null because these
+// rows predate per-row timestamps; `rebuilt_at` is the only time this script can honestly stamp.
+// (summarize-card-pull.mjs takes ran_at from rows[].at; do the same here once rows carry it.)
+const arg = (i) => (process.argv[i + 2] === undefined ? null : Number(process.argv[i + 2]));
 const out = {
   config: {
-    N: Number(N), SEED: Number(SEED), TOP_K: Number(TOP_K), model: MODEL,
+    N: arg(0), SEED: arg(1), TOP_K: arg(2), model: process.argv[5] ?? null,
     arms: ["ru_bare", "ru_anchored", "en"],
-    ran_at: new Date().toISOString(),
+    ran_at: rows.find((r) => r.at)?.at ?? null,
+    rebuilt_at: new Date().toISOString(),
     rebuilt_from: "out/memory-provider.jsonl",
   },
   providers: summarize(rows),

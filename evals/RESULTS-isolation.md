@@ -62,7 +62,12 @@ looks clean until you notice more than one thing changed between the arms.
 
 ## Consequence for committed results
 
-`RESULTS-2nd.md` and `RESULTS-transfer.md` were produced under the leak.
+`RESULTS-2nd.md`, `RESULTS-transfer.md` **and `RESULTS-memory-provider.md`** were produced under
+the leak. The third was missed when the other two were marked — and it was the worst omission,
+being the artifact that gates CI and justifies deleting 276 lines from `recall-context.mjs`. It
+has since been **re-run isolated** rather than annotated: the conclusion held (mem0 R 0.88 → 0.95,
+claude-mem 0.00 → 0.00 on the identical frozen 24 rows), so the cards and the CI gate stand on an
+isolated measurement now. The remaining two are still only marked, not re-run.
 
 - Their **core-recall** numbers are not undermined by it.
 - Their **hits / empty / precision** columns are, in the direction of looking better than they

@@ -5,7 +5,9 @@ Protocol (design, metric, decision rule, confounds) fixed before data collection
 [`check-cards.test.mjs`](check-cards.test.mjs) enforces against every provider card:
 [`results-memory-provider.json`](results-memory-provider.json).
 
-Run: `N=24`, `SEED=20260918`, `TOP_K=5`, query author `sonnet`, 2026-09-18.
+Run: `N=24`, `SEED=20260918`, `TOP_K=5`, query author `sonnet`. Measured twice — once before
+the harness was isolated and once after (see **Re-measured under isolation** below); the table
+reports the isolated run, which is the one the cards and `check-cards.test.mjs` cite.
 
 ## The numbers
 
@@ -14,12 +16,33 @@ that saw only that memory's text, so the retrieval either returns it or does not
 
 | provider | `ru_bare` | `ru_anchored` | `en` | **R = ru_bare / en** |
 | --- | --- | --- | --- | --- |
-| **mem0** | 0.88 | 0.92 | 1.00 | **0.88** |
-| **claude-mem** | 0.00 | 0.46 | 0.79 | **0.00** |
+| **mem0** | 0.91 | 0.96 | 0.96 | **0.95** |
+| **claude-mem** | 0.00 | 0.33 | 0.83 | **0.00** |
 
-MRR@5: mem0 0.77 / 0.85 / 0.95; claude-mem 0.00 / 0.22 / 0.39. (MRR is a tie-breaker only — the
-claude-mem endpoint groups its results by date rather than rank, so its rank positions are not a
-faithful ranking. `recall@5` is unaffected: `limit=5` still returns that provider's top 5.)
+## Re-measured under isolation
+
+The first run of this eval went through `lib.mjs`'s `claude()` **before** the harness leak was
+fixed, so its query author held the yfx project guide, `gitStatus`, and a claude-mem memory
+digest while writing queries about yfx's own memory corpus — a direct path into the `claude-mem`
+column. A code review caught that this document, alone among the results files, carried no
+provenance mark while being the artifact that gates CI and justifies deleting 276 lines from
+`recall-context.mjs`. So it was re-run isolated rather than merely annotated.
+
+| provider | condition | `ru_bare` | `ru_anchored` | `en` | **R** |
+| --- | --- | --- | --- | --- | --- |
+| mem0 | leaky | 0.88 | 0.92 | 1.00 | 0.88 |
+| mem0 | **isolated** | 0.91 | 0.96 | 0.96 | **0.95** |
+| claude-mem | leaky | 0.00 | 0.46 | 0.79 | 0.00 |
+| claude-mem | **isolated** | 0.00 | 0.33 | 0.83 | **0.00** |
+
+**The conclusion survives, and the key cell is a replication.** claude-mem's corpus is frozen —
+its write path is out of quota — so the seeded sample drew the *identical 24 rows* both times,
+and `ru_bare` was 0/24 in both. That is a replicated zero on the exact column the review flagged
+as most at risk, not a single draw.
+
+mem0's ratio moved 0.88 → 0.95, i.e. isolation made the case *stronger*. Its corpus grew from 198
+to 353 memories between runs (this project's own sessions wrote to it), so the seeded sample drew
+different rows and the mem0 comparison is distributional rather than paired.
 
 ## Verdict against the pre-registered rule
 

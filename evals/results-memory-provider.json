@@ -9,35 +9,34 @@
       "ru_anchored",
       "en"
     ],
-    "ran_at": "2026-09-18T08:04:40.878Z",
-    "rebuilt_from": "out/memory-provider.jsonl"
+    "ran_at": "2026-09-21T08:24:43.519Z"
   },
   "providers": [
     {
       "provider": "mem0",
       "ru_bare": {
-        "n": 24,
-        "recall": 0.875,
-        "mrr": 0.7722222222222221,
-        "skipped": 0,
+        "n": 23,
+        "recall": 0.9130434782608695,
+        "mrr": 0.8623188405797101,
+        "skipped": 1,
         "errors": 0
       },
       "ru_anchored": {
         "n": 24,
-        "recall": 0.9166666666666666,
-        "mrr": 0.8541666666666666,
+        "recall": 0.9583333333333334,
+        "mrr": 0.888888888888889,
         "skipped": 0,
         "errors": 0
       },
       "en": {
         "n": 24,
-        "recall": 1,
-        "mrr": 0.9513888888888888,
+        "recall": 0.9583333333333334,
+        "mrr": 0.9375,
         "skipped": 0,
         "errors": 0
       },
-      "ratio": 0.875,
-      "paired_n": 24
+      "ratio": 0.9527410207939507,
+      "paired_n": 23
     },
     {
       "provider": "claude-mem",
@@ -50,15 +49,15 @@
       },
       "ru_anchored": {
         "n": 24,
-        "recall": 0.4583333333333333,
-        "mrr": 0.22291666666666668,
+        "recall": 0.3333333333333333,
+        "mrr": 0.19027777777777777,
         "skipped": 0,
         "errors": 0
       },
       "en": {
         "n": 24,
-        "recall": 0.7916666666666666,
-        "mrr": 0.38720238095238085,
+        "recall": 0.8333333333333334,
+        "mrr": 0.43511904761904757,
         "skipped": 0,
         "errors": 0
       },

@@ -10,7 +10,7 @@ measured:
   eval: evals/memory-provider.mjs
   ratio: 0.0
   recall_ru_bare: 0.0
-  recall_en: 0.7916666666666666
+  recall_en: 0.8333
   n: 24
 ---
 
@@ -28,12 +28,15 @@ Step 1 alone gives you titles, not content. Do not summarize from titles.
 ## You must compose English terms — this is measured
 
 claude-mem's search **does not bridge languages at all**. A pure-Cyrillic question retrieved the
-right observation in **0 of 24** cases (`recall@5` 0.00 against an English ceiling of 0.79 —
-ratio **0.00**, `n=24`, `evals/results-memory-provider.json`). Passing the user's Russian prompt
-through is not a weak search; it is a guaranteed miss.
+right observation in **0 of 24** cases (`recall@5` 0.00 against an English ceiling of 0.83 —
+ratio **0.00**, `n=24`, `evals/results-memory-provider.json`). That 0/24 reproduced exactly
+across two runs of the eval, on the identical 24 rows — this corpus is frozen — so it is a
+replicated result, not a single draw. Passing the user's Russian prompt through is not a weak
+search; it is a guaranteed miss.
 
-Keeping the Latin identifiers inside an otherwise Russian sentence recovers roughly half
-(`recall@5` 0.46) — which is why identifiers are the load-bearing part, not the grammar.
+Keeping the Latin identifiers inside an otherwise Russian sentence recovers a third to a half
+(`recall@5` 0.33 and 0.46 across the two runs) — which is why identifiers are the load-bearing
+part, not the grammar.
 
 So: **compose 5–10 project-aware English search terms** — real symbol names, file names, config
 keys (`parseConfig`, `retry.ts`, `MAX_RETRIES`), not a literal translation of the user's words.

@@ -59,7 +59,8 @@ caught — three of the four were found by a code review, not by the author.
    provider existed and that memory was down, which is why it skipped `/recall`. Fixed with an
    isolated `CLAUDE_CONFIG_DIR` (credentials symlinked, never copied). The `hook_leak` detector
    was then checked for being a dead channel: 6 hook events without isolation, 0 with.
-   **`evals/lib.mjs` has the same leak and is not yet fixed.**
+   `evals/lib.mjs` had the same leak; it is fixed too, and what it cost is measured in
+   [`RESULTS-isolation.md`](RESULTS-isolation.md).
 2. **Symlinked skills let the control arm reach the real card.** POSIX resolves symlinks before
    `..`, so `.claude/skills/recall/../memory-provider.md` landed in the real repo, where the real
    mem0 card lives. Skills are now copied into the scratch project.

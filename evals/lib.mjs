@@ -59,10 +59,21 @@ function scratchCwd() {
   return SCRATCH_CWD;
 }
 
-// True when a run produced hook events it should not have. Callers that surface it turn a silent
-// contamination into a loud one; this repo has already paid for one dead verdict channel.
-export let HOOK_EVENTS_SEEN = 0;
+// NO hook-event counter here, deliberately. An earlier version of this file exported
+// `export let HOOK_EVENTS_SEEN = 0` with a comment about dead verdict channels — and was itself
+// one: nothing incremented it, an ESM `export let` is a read-only binding in importers so no
+// caller COULD have, and `claude()` asks for plain text rather than `--output-format stream-json`,
+// so there is no channel to observe hook events on in the first place. `card-pull.mjs` can count
+// them because it parses the stream; this helper cannot without changing every caller's parsing.
+//
+// What is checkable for free is structural, so that is what is offered: whether isolation is on,
+// and where it points. Harnesses print it, which is how a silent regression becomes visible.
 export const isolationActive = () => ISOLATE;
+export function isolationReport() {
+  if (!ISOLATE) return "ISOLATION OFF (EVAL_ISOLATION=0) — inherited hooks and CLAUDE.md are in play";
+  const cfg = configDir();
+  return `isolated: config=${cfg} cwd=${scratchCwd()} (no settings.json, no CLAUDE.md)`;
+}
 
 // Run a context-less claude -p subprocess (no MCP, no project files) so the only
 // information the model has is what we hand it in the prompt. Retries with backoff
