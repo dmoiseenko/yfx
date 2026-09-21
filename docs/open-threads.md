@@ -391,11 +391,13 @@ arm differs in one respect when it differs in two**.
 - ~~Isolate the referee and the auditor separately~~ — **done**. `claude()` takes a per-call
   `isolate` override; `ISOLATE_AUDITOR` / `ISOLATE_REFEREE` complete the 2x2. Grouping six runs
   by one role at a time: **`known` separates by the referee** (1, 2, 3 leaky vs 12, 13, 15
-  isolated, no overlap, factor of four) — it is a **scoring-side** effect, not better objections.
-  `hits` and `precision` separate by the *auditor* instead, but by 17-vs-19 and 59-vs-63, inside
-  this repo's measured run-to-run spread — a direction, not an effect. **`core-recall` separates
-  by neither**, which is why the headline survived: whether an auditor caught the core problem is
-  robust to both leaks; how its findings get *classified* is not.
+  isolated) — a **scoring-side** effect, not better objections: the gap is 9 against a
+  within-group spread of 3. `hits` and `precision` group by the *auditor* instead, but their gaps
+  (2 and 4) are **smaller than the spread inside either group** (6 and 15), so that half is **not
+  established** — non-overlap alone is too weak a test at three runs per group, and the same test
+  weakens the "precision was inflated" reading of the earlier paired table too. **`core-recall`
+  separates by neither**, which is why the headline survived: whether an auditor caught the core
+  problem is robust to both leaks; how its findings get *classified* is not.
 - The mode classifier and readiness evals also ran under the leak and are not re-checked at all.
 
 ## What shipped (done)

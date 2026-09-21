@@ -68,9 +68,13 @@ function scratchCwd() {
 // What is checkable for free is structural, so that is what is offered: whether isolation is on,
 // and where it points. Harnesses print it, which is how a silent regression becomes visible.
 export const isolationActive = () => ISOLATE;
-export function isolationReport(label = "") {
+// Takes the EFFECTIVE flag, not the module-level default. An earlier version closed over
+// `ISOLATE` while callers labelled its output per role — so a run with `ISOLATE_AUDITOR=0`
+// printed "auditor isolated" one line above "auditor=false". A status line that lies in exactly
+// the runs it was added to describe is worse than no status line.
+export function isolationReport(label = "", isolate = ISOLATE) {
   const tag = label ? `${label}: ` : "";
-  if (!ISOLATE) return `${tag}ISOLATION OFF — inherited hooks and CLAUDE.md are in play`;
+  if (!isolate) return `${tag}LEAKY — inherited hooks and CLAUDE.md are in play`;
   return `${tag}isolated: config=${configDir()} cwd=${scratchCwd()} (no settings.json, no CLAUDE.md)`;
 }
 

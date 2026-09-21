@@ -38,7 +38,7 @@
 
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { claude, firstJson, shippedSecondMandate, MODEL, ROOT, isolationReport } from "./lib.mjs";
+import { claude, firstJson, shippedSecondMandate, MODEL, ROOT, isolationReport, isolationActive } from "./lib.mjs";
 
 const MANDATE = shippedSecondMandate();
 const OTHER_MODEL = process.env.OTHER_MODEL || "haiku";
@@ -193,8 +193,9 @@ const tally = Object.fromEntries(ARMS.map((a) => [a.key, zero()]));
 
 console.error(`/2nd A/B + ablation: ${DATASET} — ${CASES.length} cases x ${ARMS.length} arms x ${SAMPLES} samples (model=${MODEL}, other=${OTHER_MODEL})`);
 // Printed every run: a silent isolation regression would otherwise publish as a clean result.
-console.error(`  auditor ${isolationReport()} | referee ${ISO_REFEREE === undefined ? "(same)" : ISO_REFEREE ? "ISOLATED" : "LEAKY"}`);
-console.error(`  roles: auditor=${ISO_AUDITOR === undefined ? "default" : ISO_AUDITOR} referee=${ISO_REFEREE === undefined ? "default" : ISO_REFEREE}`);
+// Per role, from the EFFECTIVE flag each role's calls will use — the whole point of printing it.
+console.error(`  ${isolationReport("auditor", ISO_AUDITOR ?? isolationActive())}`);
+console.error(`  ${isolationReport("referee", ISO_REFEREE ?? isolationActive())}`);
 if (SKIPPED.length) console.error(`  arms NOT run this pass: ${SKIPPED.join(", ")}`);
 console.error("");
 

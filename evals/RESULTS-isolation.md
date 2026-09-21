@@ -78,17 +78,28 @@ Grouping every run by one role and ignoring the other:
 | `precision` | auditor | overlaps | 63, 63, 77 / 44, 50, 59 |
 | `core-recall` | **neither** | overlaps | overlaps |
 
-**Both roles were contaminated, in different channels.** A leaking auditor holds real project
-context and names mechanisms rather than categories, so more of its findings score as hits. A
-leaking referee under-calls `known`.
+**Only one of these is established.** "The groups do not overlap" is too weak a test at three
+runs per group, because the groups themselves are wide. Comparing the between-group gap against
+the widest within-group spread:
 
-**The two are not equally solid, and should not be quoted as if they were.** `known` separates by
-a factor of four with no overlap across six runs — that is an effect. The auditor's pull on
-`hits` and `precision` separates by 17-vs-19 and 59-vs-63, margins inside the run-to-run spread
-this repo has measured elsewhere — that is a direction.
+| channel | role | groups | gap | within-group spread | verdict |
+| --- | --- | --- | --- | --- | --- |
+| `known` | referee | 1,2,3 vs 12,13,15 | **9** | 3 | **effect** |
+| `hits` | auditor | 19,20,25 vs 15,17,17 | 2 | 6 | not established |
+| `precision` | auditor | 63,63,77 vs 44,50,59 | 4 | 15 | not established |
 
-**`core-recall` separates by neither**, which is why the headline survived: whether an auditor
-caught the core materialized problem is robust to both leaks, while how its findings get
+So: **`known` belongs to the referee** — a leaking scorer under-calls "the author already knew
+this", by a margin three times the noise. That is the one claim this 2x2 supports.
+
+The auditor's apparent pull on `hits` and `precision` is **not established**. The separation is
+clean but the margin is smaller than the spread inside either group, so the direction is
+suggestive at best and the magnitude is not estimable at this n. The same test applied to the
+original paired comparison above (precision 63,63 leaky vs 50,59 isolated) gives a gap of 4
+against a spread of 9 — so the "precision was inflated" reading of that table is weaker than it
+was first written, too.
+
+**`core-recall` separates by neither role.** That is why the headline survived: whether an
+auditor caught the core materialized problem is robust to both leaks, while how its findings get
 *classified* is not.
 
 ## Consequence for committed results
@@ -100,10 +111,13 @@ has since been **re-run isolated** rather than annotated: the conclusion held (m
 claude-mem 0.00 → 0.00 on the identical frozen 24 rows), so the cards and the CI gate stand on an
 isolated measurement now. The remaining two are still only marked, not re-run.
 
-- Their **core-recall** numbers are not undermined by it.
-- Their **hits / empty / precision** columns are, in the direction of looking better than they
-  are — which is precisely the channel that decides whether `/2nd` is worth the user's attention
-  (caveat #2: every empty objection is paid attention).
+- Their **core-recall** numbers are not undermined by it, by either role.
+- Their **`known` classification is distorted** — established, and it belongs to the referee.
+  Since `known` is one of four buckets an objection can land in, shifting it shifts the others.
+- Their **hits / precision** columns moved in the direction of looking better than they are, but
+  **that is not established at this n** (see the gap-vs-spread table above). It remains the
+  reason to re-run them — every empty objection is paid attention (caveat #2) — not a finding
+  about them.
 
 ## Limits
 
