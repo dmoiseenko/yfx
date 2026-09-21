@@ -50,15 +50,46 @@ precision (63%, 63% vs 50%, 59%).
 **`known` is the big one: 2 and 1 under the leak, 13 and 15 isolated.** Under the leak the referee
 almost never judged an objection to be something the author already knew.
 
-## What this design cannot separate
+## Attributing it: which role was the leak acting on
 
-**The referee is a `claude()` call too, and it was leaking as well.** So the `known` collapse may
-be a *scoring-side* effect — a referee holding the yfx design record judges "already known"
-differently — rather than the auditor producing better objections. Both roles moved at once, and
-nothing here separates them. A run isolating only one side would.
+The runs above move the **auditor and the referee together** — the referee is a `claude()` call
+too — so they cannot say whether `known` collapsed because objections got better or because the
+scorer judged "already known" differently. That is the same mistake as the `ru_query` claim in
+`RESULTS-card-pull.md`: a comparison that looks clean until you notice more than one thing
+changed between the arms.
 
-This is the same mistake as the `ru_query` claim in `RESULTS-card-pull.md`: a comparison that
-looks clean until you notice more than one thing changed between the arms.
+`lib.mjs`'s `claude()` now takes a per-call `isolate` override, and `second-opinion.mjs` exposes
+`ISOLATE_AUDITOR` / `ISOLATE_REFEREE`, so one role can be held leaky while the other is isolated.
+Completing the 2x2 (arm B, k=3; the diagonal cells are the two pairs above):
+
+| auditor | referee | core-recall | hits | empty | **known** | precision |
+| --- | --- | --- | --- | --- | --- | --- |
+| leak | leak | 67%, 78% | 19, 25 | 11, 15 | **2, 1** | 63%, 63% |
+| iso | iso | 76%, 76% | 15, 17 | 15, 12 | **13, 15** | 50%, 59% |
+| iso | leak | 78% | 17 | 22 | **3** | 44% |
+| leak | iso | 72% | 20 | 6 | **12** | 77% |
+
+Grouping every run by one role and ignoring the other:
+
+| channel | separates by | referee leaky / isolated | auditor leaky / isolated |
+| --- | --- | --- | --- |
+| `known` | **referee** | 1, 2, 3 / 12, 13, 15 | overlaps |
+| `hits` | auditor | overlaps | 19, 20, 25 / 15, 17, 17 |
+| `precision` | auditor | overlaps | 63, 63, 77 / 44, 50, 59 |
+| `core-recall` | **neither** | overlaps | overlaps |
+
+**Both roles were contaminated, in different channels.** A leaking auditor holds real project
+context and names mechanisms rather than categories, so more of its findings score as hits. A
+leaking referee under-calls `known`.
+
+**The two are not equally solid, and should not be quoted as if they were.** `known` separates by
+a factor of four with no overlap across six runs — that is an effect. The auditor's pull on
+`hits` and `precision` separates by 17-vs-19 and 59-vs-63, margins inside the run-to-run spread
+this repo has measured elsewhere — that is a direction.
+
+**`core-recall` separates by neither**, which is why the headline survived: whether an auditor
+caught the core materialized problem is robust to both leaks, while how its findings get
+*classified* is not.
 
 ## Consequence for committed results
 
@@ -76,7 +107,10 @@ isolated measurement now. The remaining two are still only marked, not re-run.
 
 ## Limits
 
-Two pairs, one arm (B), k=3, one model, verdict-free mandate. `known` moved by roughly an order of
-magnitude and reproduced; precision moved consistently but by a few points, which is the size of
-the run-to-run spread seen elsewhere in this repo. Treat the `known` effect as real and the
-precision effect as a direction, not a quantity.
+Six runs, one arm (B), k=3, one model, verdict-free mandate. The diagonal cells of the 2x2 have
+two runs each; the off-diagonal cells have one. `known` separates by a factor of four with no
+overlap, and survives being grouped six ways — treat it as real. Everything else moved by margins
+inside this repo's measured run-to-run spread; treat those as directions, not quantities.
+
+What this does **not** establish: any of it for arms A, C, D, for the transfer dataset, or for
+the verdict-carrying mandate the committed `RESULTS-2nd.md` numbers were produced under.
