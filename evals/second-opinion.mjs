@@ -38,7 +38,7 @@
 
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { claude, firstJson, shippedSecondMandate, MODEL, ROOT } from "./lib.mjs";
+import { claude, firstJson, shippedSecondMandate, MODEL, ROOT, isolationReport } from "./lib.mjs";
 
 const MANDATE = shippedSecondMandate();
 const OTHER_MODEL = process.env.OTHER_MODEL || "haiku";
@@ -178,6 +178,8 @@ const zero = () => ({ hit: 0, known: 0, empty: 0, open: 0, objs: 0, core: 0, vOk
 const tally = Object.fromEntries(ARMS.map((a) => [a.key, zero()]));
 
 console.error(`/2nd A/B + ablation: ${DATASET} — ${CASES.length} cases x ${ARMS.length} arms x ${SAMPLES} samples (model=${MODEL}, other=${OTHER_MODEL})`);
+// Printed every run: a silent isolation regression would otherwise publish as a clean result.
+console.error(`  ${isolationReport()}`);
 if (SKIPPED.length) console.error(`  arms NOT run this pass: ${SKIPPED.join(", ")}`);
 console.error("");
 

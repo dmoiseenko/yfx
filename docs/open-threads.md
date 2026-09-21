@@ -244,6 +244,153 @@ verdict-bearing mandates, so the recorded runs stay reproducible.
 - **discovery/delivery not wired to a trigger** — the detector exists as an on-demand pass but
   nothing fires it automatically at move-start.
 
+## Update 2026-09-18 — memory decoupled: a provider is prose, not an adapter
+
+**What changed.** The framework no longer retrieves memory. A memory provider is now a **capability
+card** — prose the agent reads (`providers/*.md`, reached via the `skills/memory-provider.md`
+symlink) declaring six axes: tool, query language, citable ids, expansion, scope, auto-injection.
+Cards ship for `mem0` (default), `claude-mem`, and `none`. There is no adapter interface, no
+transport layer, no JS to implement — switching is `npm run provider <name>`.
+
+`hooks/recall-context.mjs` went from 313 lines to 117: the frequency-ranked identifier harvest,
+the transcript scrape, the anchorless-prompt skip, the per-session id dedup and the claude-mem
+HTTP client are gone. What remains is the x/y nudge, which never needed a provider.
+
+**Why — measured, not argued.** `evals/PROTOCOL-memory-provider.md` was registered before data;
+`evals/RESULTS-memory-provider.md` has the run (n=24, gold = identity, queries authored by a
+context-less agent that saw only the memory). A pure-Cyrillic query retrieves the target memory in
+**0/24** cases on claude-mem and **21/24** on mem0 (ratio 0.00 vs 0.88). The premise the harvest
+rested on — "a raw non-English query retrieves ~0%" — is real and **provider-specific**. Keeping
+the workaround in shared code would have hardcoded one provider's defect into the framework.
+
+**What this contradicts, stated rather than slipped past.**
+- The `recall-context` hook's own design rationale (its header argued the harvest was the point).
+- The A/B behind it (+33% diagnostic reasoning, +100% recall intent) was measured on the version
+  that **injected memory**. That result does not transfer to the nudge-only hook that now ships.
+- `PROTOCOL-memory-provider.md`'s decision rule was written to partition *code* between `core/`
+  and `providers/*.mjs`. Prose cards made that framing obsolete mid-run; the amendment at the
+  bottom of that file records it. Thresholds were untouched and both providers landed far outside
+  the inconclusive band, so no judgment call was made after seeing data.
+
+**Newly open.**
+- **The nudge-only hook is unvalidated.** It needs its own A/B; the old one no longer applies.
+- **Card-pull is untested.** The whole design assumes an agent hitting an x-deficit will follow
+  the link and read the card. Pull was chosen over push precisely because #15105 measured that the
+  always-on x/y prompt *suppresses skill invocation* — but that makes compliance the load-bearing
+  assumption, and nothing measures it yet. If agents skip the card, the fallback is worse than the
+  old hardcoding: they will guess a tool name.
+- **claude-mem users lose passive warm-thread retrieval.** They keep the SessionStart digest and
+  `/recall`, and get nothing in between. Not measured as a regression; named as a known cost.
+- **Still n=1 repository.** This removes the cross-provider question from guesswork, not the
+  standing generalizability caveat.
+
+## Update 2026-09-19 — card-pull measured; one claim made and retracted in the same day
+
+The previous entry left two things open. One is now settled, one is not, and the not is the more
+useful half.
+
+**Settled: the card is load-bearing and gate 2 is closed.** `evals/RESULTS-card-pull.md`
+(n=5/cell, four arms, two gates). Compliance was made observable by giving every arm four memory
+tools with identical descriptions and schemas — `memory_search`, `recall_probe_a7f3`,
+`search_observations`, `knowledge_lookup` — where only the card names the right one. A single
+uniquely-named tool would not have worked: the model sees its own tool list, so naming a tool it
+can already see proves nothing about having read anything.
+
+- Control called a decoy **10/10** and the declared tool **0/10** — not the 1-in-4 of a blind
+  pick. Without a card the agent reaches for `memory_search` systematically.
+- Every arm with a card called the declared tool **1.00**, forced and unforced. The assumption
+  the pull design rested on — that an agent follows the link and acts on the card — held.
+- The card's language row beats the skill's default: every card arm scored `ru_query` 1.00,
+  overriding `skills/recall/SKILL.md`, which argues the other way in four lines with worked
+  examples against one line for `any`. **Narrowed after review**: this does NOT show the card
+  alone explains control's low `ru_query`, since control reads the same English-pushing skill —
+  and the unforced control cell (`declared` 0.00, `ru_query` 0.20) falsifies the "row for row"
+  phrasing an earlier draft used. Isolating that needs a language-neutral skill arm.
+- Nobody invented an id, which `citable_ids: false` asks for.
+- **Push suppresses skill invocation**: unforced `skill_used` 0.00 here, 0.20 in an earlier run —
+  the only effect that reproduced with the same sign and size. #15105 holds. Push buys the tool
+  name and loses the skill carrying the x/y diagnosis and the citation discipline. **Pull beats
+  push: identical compliance, and only push pays.**
+
+**Not settled, and retracted: the nudge does not demonstrably repair gate 1.** An earlier clean
+run gave `unforced pull` 0.60 on `declared` and `skill_used`, and it was written up as "gate 1
+leaks, the nudge repairs it 0.60 → 1.00". The repeat does not reproduce it: unforced `pull` is
+1.00 unaided and `nudge` is *lower* on `skill_used` (0.80). Run-to-run spread at n=5 is as large
+as the effect attributed to the nudge. **The nudge-only hook's re-validation debt, opened when
+retrieval was stripped from it, stays open.**
+
+**The method lesson, which cost more than the result.** Four harness bugs each produced a
+confident, plausible, wrong table before being caught, and three of the four were found by a code
+review rather than by the author:
+- ambient hooks fire inside `claude -p` (`--strict-mcp-config` strips MCP but not hooks, and
+  `--settings '{"hooks":{}}'` does not override them) — the claude-mem outage digest leaked into
+  an agent's answer and changed its behaviour;
+- symlinked skill dirs let the control arm walk `..` back into the real repo and read the real card;
+- a card begins with `---`, which `claude -p` parses as a flag — it silently erased a whole arm;
+- `null / 0.79` is `0` in JS, so a fully-skipped arm would have been enforced on a card as a
+  measured `english_only` verdict.
+
+In a repo that measures agent behaviour, the harness fails more quietly than the thing being
+measured. Budget for an independent review of the harness, not only of the finding.
+
+**Newly open.**
+- **n is too small.** Every cell is 5 runs, and the retraction above is what that buys. Raise n
+  before any cell here is cited as a result.
+- ~~**`evals/lib.mjs` has the same ambient-hook leak**~~ — **fixed and measured**, see the
+  2026-09-19 (later) entry below. The leak was wider than described here, and its cost lands on
+  precision rather than recall.
+- **Synthetic task, one model, one day.** One invented three-file project and five Russian
+  x-deficit questions. Nothing here separates a property of the framework from a property of the
+  model that ran it.
+
+## Update 2026-09-19 (later) — the harness was leaking the design record into its own blind roles
+
+Issue #14, closed by measurement rather than by assumption. Results: `evals/RESULTS-isolation.md`.
+
+**The leak was wider than the issue described.** Looking for inherited hooks, I found two holes:
+`--strict-mcp-config` strips MCP but not hooks (a claude-mem digest reached the blind agent), and
+`cwd` sat inside this repo, so `CLAUDE.md` auto-discovery handed the subprocess **the yfx project
+guide and gitStatus**. The second is the worse one: the role that `evals/README.md` calls blind
+was reading the design document of the thing it was judging. Asked to list its injected context,
+the subprocess named the project guide, gitStatus and a ~50-observation digest before the fix,
+and `NONE` after.
+
+**What it cost — two paired runs, arm B, k=3, isolation the only variable** (deliberately *not*
+compared against `RESULTS-2nd.md`, whose v3 numbers carry a different mandate — that would
+confound two changes):
+
+| | leak | isolated |
+| --- | --- | --- |
+| core-recall | 67%, 78% | 76%, 76% |
+| hits | 19, 25 | 15, 17 |
+| precision | 63%, 63% | 50%, 59% |
+| **known** | **2, 1** | **13, 15** |
+
+- **Core-recall survives.** The `/2nd`-earns-its-keep headline is not an artifact of the leak,
+  and the isolated measurement is the steadier of the two.
+- **Precision was inflated in both pairs**, and `known` collapsed by an order of magnitude.
+  So the committed `hits`/`empty`/`precision` columns are the suspect ones — which is exactly the
+  channel that decides whether `/2nd` is worth the attention it spends (caveat #2).
+
+**What the design cannot separate, named rather than glossed.** The referee is a `claude()` call
+too, so it leaked as well. The `known` collapse may be a *scoring-side* effect — a referee
+holding the design record judges "already known" differently — not better objections. Both roles
+moved at once. Separating them needs a run that isolates one side only.
+
+That is the third time today a comparison looked clean until a second variable turned up in it
+(after `ru_query` and the nudge arm). The recurring error is not arithmetic; it is **believing an
+arm differs in one respect when it differs in two**.
+
+**Newly open.**
+- Re-run `RESULTS-2nd.md` and `RESULTS-transfer.md` isolated, for the precision columns. Their
+  recall columns do not need it.
+- **`RESULTS-memory-provider.md` was under the leak too and was missed in the first sweep** — the
+  worst omission, since it gates CI and justified deleting 276 lines. Now **re-run isolated**:
+  mem0 R 0.88 → 0.95, claude-mem 0.00 → 0.00 on the identical frozen 24 rows. The conclusion held
+  and the key zero replicated, so the cards stand on an isolated measurement. Closed.
+- Isolate the referee and the auditor separately, to attribute the `known` effect.
+- The mode classifier and readiness evals also ran under the leak and are not re-checked at all.
+
 ## What shipped (done)
 
 - `/fresh-lens` skill (detect + audit), mandates embedded.

@@ -37,9 +37,10 @@ From the axis, draft the 3–5 outcomes the request could plausibly mean.
 
 ## Step 3 — Vet each candidate against memory (don't skip)
 
-Before offering them, check each candidate against claude-mem — a cheap search
-per uncertain candidate (~250ms each; you're already running, so it's nearly
-free). This is not "one broad recall for backdrop" — it decides which directions
+Before offering them, check each candidate against memory — a cheap search per uncertain
+candidate (~250ms each; you're already running, so it's nearly free). Query it the way
+[the provider card](../memory-provider.md) says to; if the card is `none`, vet against the code
+and `git log` instead. This is not "one broad recall for backdrop" — it decides which directions
 survive:
 
 - **Already done / recently reworked** → drop it or down-rank it. *(Measured

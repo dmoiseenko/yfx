@@ -74,8 +74,10 @@ skills/
   clarify/       — /clarify (sharpen y)
   fresh-lens/    — /fresh-lens (detect mode + audit for unknown-unknowns)
   xy-diagnosis.md — Step 0: x-vs-y diagnosis, shared by recall & clarify
+  memory-provider.md — symlink to the active provider card (npm run provider <name>)
+providers/        — memory provider cards: mem0, claude-mem, none (prose, not code)
 hooks/
-  recall-context.mjs        — UserPromptSubmit: cheap always-on x-tier (claude-mem auto-search)
+  recall-context.mjs        — UserPromptSubmit: cheap always-on x/y nudge (no retrieval)
   fresh-lens-trigger.mjs    — PreToolUse: exogenous audit trigger at commitment boundaries
 docs/
   convergence-protocol.md   — the protocol, discovery-vs-delivery modes, open UU/caveats
@@ -84,6 +86,8 @@ docs/
   nature-of-f.md            — properties of f; the y ≈ combine(f(x), g(x)) reframe (provisional)
   open-threads.md           — current state and what's still unresolved
 evals/          — L0 blind-label replay harness (classifier vs independent truth)
+                  + the memory-provider language-bridge eval
+scripts/        — use-provider.mjs: switch the active provider card
 readiness.md    — the tool-agnostic core probe (is x sufficient / y clear — works in any agent)
 examples/
   AGENTS.md     — copy-in Codex wiring for the readiness probe
@@ -108,9 +112,22 @@ versioned source of truth, the install is just symlinks pointing back here.
 independent sub-agent) are pure Claude Code — available immediately. `xy-diagnosis` is the shared
 Step-0 method they build on.
 
-**Needs [claude-mem](https://github.com/thedotmack/claude-mem):** `/recall`'s "fill x" step
-searches persistent memory via claude-mem's tools; without it installed, `/recall` degrades to the
-x/y diagnosis with no retrieval. The `recall-context` hook needs the claude-mem worker too.
+**Needs a memory provider:** `/recall`'s "fill x" step searches persistent memory. Which store,
+and how to query it, is declared in a **provider card** — prose the agent reads, not an adapter
+to implement:
+
+```bash
+npm run provider            # show the active card and what's available
+npm run provider mem0       # mem0 (default) | claude-mem | none
+```
+
+`none` is a supported configuration: `/recall` still runs the diagnosis and falls back to the
+code, `git log`, and asking the user. `/clarify` and `/fresh-lens` never needed memory at all.
+
+Cards are **measured, not asserted**. Each declares six capability axes, and the `query_language`
+row is backed by an eval — a raw Russian query retrieves 21/24 target memories on mem0 and 0/24
+on claude-mem ([`evals/RESULTS-memory-provider.md`](evals/RESULTS-memory-provider.md)).
+`npm test` fails if a card claims a capability no run measured.
 
 **Hooks are off by default.** `install.sh` links them in but they stay dormant until you wire them
 in `~/.claude/settings.json` and set each one's opt-in flag (`FRESH_LENS_TRIGGER=1`, or a

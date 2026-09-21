@@ -24,8 +24,9 @@ so it travels.
 
 ## Repo map
 
-- `skills/` — `recall` (fill x) · `clarify` (sharpen y) · `fresh-lens` (detect mode + audit for UU) · `xy-diagnosis.md` (Step 0)
-- `hooks/` — `recall-context.mjs` (UserPromptSubmit, claude-mem auto-search) · `fresh-lens-trigger.mjs` (PreToolUse, exogenous audit trigger at commit boundaries). Both **off by default**, toggle per file header.
+- `skills/` — `recall` (fill x) · `clarify` (sharpen y) · `fresh-lens` (detect mode + audit for UU) · `xy-diagnosis.md` (Step 0) · `memory-provider.md` (symlink to the active provider card)
+- `providers/` — memory provider cards (`mem0`, `claude-mem`, `none`). A provider "plugin" is **prose the agent reads**, not a JS adapter: six declared capability axes, switched with `npm run provider <name>`. The `query_language` axis is measured, and `npm test` fails a card that claims more than a run measured.
+- `hooks/` — `recall-context.mjs` (UserPromptSubmit, x/y nudge only — it does **not** retrieve; see its header for why the harvest was removed) · `fresh-lens-trigger.mjs` (PreToolUse, exogenous audit trigger at commit boundaries). Both **off by default**, toggle per file header.
 - `docs/` — the design record (above).
 
 ## Conventions
@@ -35,3 +36,10 @@ so it travels.
 - Keep the framework honest: when you change a probe, check it against its own caveats in `docs/`.
   A change that contradicts a recorded decision must say so and re-argue it, not slip past.
 - Both hooks stay dormant unless explicitly toggled; don't wire them on by default.
+- Nothing outside `providers/` may hardcode a memory provider's **tool or transport**. A skill or
+  hook that does re-couples the framework; route through `skills/memory-provider.md` instead.
+  Naming a provider in *rationale* is fine and sometimes required — `skills/recall/SKILL.md` says
+  which provider each retrieval measurement was taken on, because a number without its provider
+  is the very overreach this layer exists to stop.
+- `npm test` runs the hook unit tests and the card claim-vs-measurement checks. Run it before
+  committing a change to a card or a hook.

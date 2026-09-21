@@ -27,9 +27,28 @@ node label-blind.mjs     # -> out/blind.jsonl        (independent hindsight trut
 node score.mjs           # joins them + measures echo
 ```
 
-Needs the `claude` CLI on PATH. Each script spawns one context-less `claude -p` per row
-(`--strict-mcp-config`, no MCP, no project files) so the model's only information is what the
-prompt hands it. `MODEL=haiku` for a cheaper/faster pass; default `sonnet`.
+Needs the `claude` CLI on PATH. Each script spawns one context-less `claude -p` per row so the
+model's only information is what the prompt hands it. `MODEL=haiku` for a cheaper/faster pass;
+default `sonnet`.
+
+**"Context-less" took two fixes to become true.** `--strict-mcp-config` alone does not deliver it:
+
+- it strips MCP servers but **not hooks**, so the subprocess inherited the developer's global
+  `settings.json` and every `SessionStart` / `UserPromptSubmit` hook fired inside the eval — a
+  claude-mem memory digest landed in a supposedly blind agent's context and changed what it did
+  (`--settings '{"hooks":{}}'` does *not* override inherited hooks; verified);
+- and the subprocess ran with `cwd` inside this repo, so `CLAUDE.md` auto-discovery handed it the
+  yfx project guide plus `gitStatus` — for an eval about this framework, the worst possible
+  contamination.
+
+`claude()` in `lib.mjs` now runs every call from an empty scratch `cwd` with `CLAUDE_CONFIG_DIR`
+pointed at a scratch config dir (credentials symlinked, never copied). Asked to list what was
+injected into its context, the subprocess answered with the project guide and a memory digest
+before, and `NONE` after.
+
+`EVAL_ISOLATION=0` restores the old leaky behaviour on purpose, for the paired comparison in
+issue #14. **Results committed before this fix were produced under the leak** — see
+`RESULTS-2nd.md` and `RESULTS-transfer.md`.
 
 ## The three numbers
 

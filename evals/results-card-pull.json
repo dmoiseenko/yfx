@@ -1,0 +1,126 @@
+{
+  "config": {
+    "arms": [
+      "pull",
+      "nudge",
+      "push",
+      "control"
+    ],
+    "gates": [
+      "forced",
+      "unforced"
+    ],
+    "prompts": 5,
+    "model": null,
+    "probe_tool": "recall_probe_a7f3",
+    "decoys": [
+      "memory_search",
+      "search_observations",
+      "knowledge_lookup"
+    ],
+    "ran_at": null,
+    "ran_until": null,
+    "rebuilt_at": "2026-09-19T14:01:28.734Z",
+    "rebuilt_from": "out/card-pull.jsonl"
+  },
+  "cells": [
+    {
+      "gate": "forced",
+      "arm": "pull",
+      "n": 5,
+      "declared": 1,
+      "decoy": 0,
+      "none": 0,
+      "ru_query": 1,
+      "touched_card": 1,
+      "skill_used": 1,
+      "fabricated_ids": 0
+    },
+    {
+      "gate": "forced",
+      "arm": "nudge",
+      "n": 5,
+      "declared": 1,
+      "decoy": 0,
+      "none": 0,
+      "ru_query": 1,
+      "touched_card": 1,
+      "skill_used": 1,
+      "fabricated_ids": 0
+    },
+    {
+      "gate": "forced",
+      "arm": "push",
+      "n": 5,
+      "declared": 1,
+      "decoy": 0,
+      "none": 0,
+      "ru_query": 1,
+      "touched_card": 0,
+      "skill_used": 1,
+      "fabricated_ids": 0
+    },
+    {
+      "gate": "forced",
+      "arm": "control",
+      "n": 5,
+      "declared": 0,
+      "decoy": 1,
+      "none": 0,
+      "ru_query": 0,
+      "touched_card": 1,
+      "skill_used": 1,
+      "fabricated_ids": 0
+    },
+    {
+      "gate": "unforced",
+      "arm": "pull",
+      "n": 5,
+      "declared": 1,
+      "decoy": 0,
+      "none": 0,
+      "ru_query": 1,
+      "touched_card": 1,
+      "skill_used": 1,
+      "fabricated_ids": 0
+    },
+    {
+      "gate": "unforced",
+      "arm": "nudge",
+      "n": 5,
+      "declared": 1,
+      "decoy": 0,
+      "none": 0,
+      "ru_query": 1,
+      "touched_card": 1,
+      "skill_used": 0.8,
+      "fabricated_ids": 0
+    },
+    {
+      "gate": "unforced",
+      "arm": "push",
+      "n": 5,
+      "declared": 1,
+      "decoy": 0,
+      "none": 0,
+      "ru_query": 1,
+      "touched_card": 0,
+      "skill_used": 0,
+      "fabricated_ids": 0
+    },
+    {
+      "gate": "unforced",
+      "arm": "control",
+      "n": 5,
+      "declared": 0,
+      "decoy": 1,
+      "none": 0,
+      "ru_query": 0.2,
+      "touched_card": 0.8,
+      "skill_used": 0.8,
+      "fabricated_ids": 0
+    }
+  ],
+  "hook_leaks": 0,
+  "errors": 0
+}
