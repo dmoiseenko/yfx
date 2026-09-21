@@ -1,5 +1,15 @@
 # /2nd — hit/false-alarm A/B + independence ablation: results
 
+> **Provenance — these numbers were produced under a harness leak.** The eval subprocess was not
+> context-less: inherited hooks put a claude-mem memory digest in its context, and a `cwd` inside
+> this repo put the yfx project guide and `gitStatus` there too. Fixed in `lib.mjs`; measured in
+> [`RESULTS-isolation.md`](RESULTS-isolation.md).
+>
+> What that costs this document: **core-recall is unaffected** (isolated runs were, if anything,
+> steadier), but **hits / empty / precision were inflated** in both paired runs — so treat the
+> precision columns below as an upper bound until they are re-measured. Issue #14 tracks it.
+
+
 Harness: `second-opinion.mjs` over `second-dataset.jsonl` (8 plans from this repo's own design
 record: 6 whose core flaw later materialized + 2 controls). Arms: **A** self-audit with
 manufactured in-context stake, **B** cold + neutral distillate (`/2nd` as shipped), **C** cold +

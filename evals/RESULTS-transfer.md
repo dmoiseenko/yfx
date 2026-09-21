@@ -1,5 +1,15 @@
 # Transfer eval — results (held-out, non-meta dataset)
 
+> **Provenance — these numbers were produced under a harness leak.** The eval subprocess was not
+> context-less: inherited hooks put a claude-mem memory digest in its context, and a `cwd` inside
+> this repo put the yfx project guide and `gitStatus` there too. Fixed in `lib.mjs`; measured in
+> [`RESULTS-isolation.md`](RESULTS-isolation.md).
+>
+> What that costs this document: **core-recall is unaffected** (isolated runs were, if anything,
+> steadier), but **hits / empty / precision were inflated** in both paired runs — so treat the
+> precision columns below as an upper bound until they are re-measured. Issue #14 tracks it.
+
+
 Run per [`PROTOCOL-transfer.md`](PROTOCOL-transfer.md), whose composition and decision rule were
 committed **before** a single case was sourced. Dataset: `second-dataset-transfer.jsonl` — 12
 engineering decisions from a private, unpublished project, each captured before the irreversible
