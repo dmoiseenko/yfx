@@ -44,11 +44,15 @@ still carried verdicts — that would confound two changes at once.
 The headline claim in `RESULTS-2nd.md` — that `/2nd` catches the core materialized flaw — survives
 the leak, and if anything the isolated measurement is the steadier one.
 
-**Precision was inflated, in both pairs.** More hits under the leak (19, 25 vs 15, 17) and higher
-precision (63%, 63% vs 50%, 59%).
+**Precision looked better under the leak** — more hits (19, 25 vs 15, 17) and higher precision
+(63%, 63% vs 50%, 59%). Read this as a direction only: the attribution section below shows the
+gap is smaller than the spread within either condition, so it is not established.
 
 **`known` is the big one: 2 and 1 under the leak, 13 and 15 isolated.** Under the leak the referee
-almost never judged an objection to be something the author already knew.
+almost never judged an objection to be something the author already knew. Note on these two pairs
+the `open` bucket moves the other way by at least as much (64 → 49, 55 → 48), which would make
+this a relabelling between two non-hit buckets rather than a finding about `known` — the 2x2
+below is what settles that, and it does not support the relabelling reading.
 
 ## Attributing it: which role was the leak acting on
 
@@ -62,41 +66,52 @@ changed between the arms.
 `ISOLATE_AUDITOR` / `ISOLATE_REFEREE`, so one role can be held leaky while the other is isolated.
 Completing the 2x2 (arm B, k=3; the diagonal cells are the two pairs above):
 
-| auditor | referee | core-recall | hits | empty | **known** | precision |
-| --- | --- | --- | --- | --- | --- | --- |
-| leak | leak | 67%, 78% | 19, 25 | 11, 15 | **2, 1** | 63%, 63% |
-| iso | iso | 76%, 76% | 15, 17 | 15, 12 | **13, 15** | 50%, 59% |
-| iso | leak | 78% | 17 | 22 | **3** | 44% |
-| leak | iso | 72% | 20 | 6 | **12** | 77% |
+Every bucket, so the accounting closes — a referee classifies each finding as exactly one of
+hit / empty / known / open, so omitting one hides where a shift went:
 
-Grouping every run by one role and ignoring the other:
+| auditor | referee | core-recall | hits | empty | **known** | open | total | precision |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| leak | leak | 67% | 19 | 11 | **2** | 64 | 96 | 63% |
+| leak | leak | 78% | 25 | 15 | **1** | 55 | 96 | 63% |
+| iso | iso | 76% | 15 | 15 | **13** | 49 | 92 | 50% |
+| iso | iso | 76% | 17 | 12 | **15** | 48 | 92 | 59% |
+| iso | leak | 78% | 17 | 22 | **3** | 54 | 96 | 44% |
+| leak | iso | 72% | 20 | 6 | **12** | 58 | 96 | 77% |
 
-| channel | separates by | referee leaky / isolated | auditor leaky / isolated |
-| --- | --- | --- | --- |
-| `known` | **referee** | 1, 2, 3 / 12, 13, 15 | overlaps |
-| `hits` | auditor | overlaps | 19, 20, 25 / 15, 17, 17 |
-| `precision` | auditor | overlaps | 63, 63, 77 / 44, 50, 59 |
-| `core-recall` | **neither** | overlaps | overlaps |
+**Only one channel is established.** "The groups do not overlap" is too weak a test at three runs
+per group, because the groups themselves are wide. Grouping all six runs by one role, then
+comparing the between-group gap against the widest within-group spread:
 
-**Only one of these is established.** "The groups do not overlap" is too weak a test at three
-runs per group, because the groups themselves are wide. Comparing the between-group gap against
-the widest within-group spread:
+| channel | grouped by referee | gap / spread | grouped by auditor | gap / spread |
+| --- | --- | --- | --- | --- |
+| **`known`** | **1,2,3 vs 12,13,15** | **9 / 3 → effect** | 1,2,12 vs 3,13,15 | overlaps |
+| `open` | 54,55,64 vs 48,49,58 | overlaps | 55,58,64 vs 48,49,54 | 1 / 9 → not established |
+| `hits` | 17,19,25 vs 15,17,20 | overlaps | 19,20,25 vs 15,17,17 | 2 / 6 → not established |
+| `empty` | 11,15,22 vs 6,12,15 | overlaps | 6,11,15 vs 12,15,22 | overlaps |
+| `precision` | overlaps | — | 63,63,77 vs 44,50,59 | 4 / 15 → not established |
+| `core-recall` | overlaps | — | overlaps | — |
 
-| channel | role | groups | gap | within-group spread | verdict |
-| --- | --- | --- | --- | --- | --- |
-| `known` | referee | 1,2,3 vs 12,13,15 | **9** | 3 | **effect** |
-| `hits` | auditor | 19,20,25 vs 15,17,17 | 2 | 6 | not established |
-| `precision` | auditor | 63,63,77 vs 44,50,59 | 4 | 15 | not established |
+**`known` belongs to the referee**: a leaking scorer under-calls "the author already knew this",
+by a margin three times the widest within-group spread. As a share of all findings the same
+separation holds — 1.0%, 2.1%, 3.1% leaky against 12.5%, 14.1%, 16.3% isolated. That is the one
+claim this 2x2 supports, and it is the only channel in the table that separates by anything.
 
-So: **`known` belongs to the referee** — a leaking scorer under-calls "the author already knew
-this", by a margin three times the noise. That is the one claim this 2x2 supports.
+**It is not merely relabelled from `open`.** On the two diagonal pairs the `open` drop exceeds
+the `known` rise (64→49 against 2→13; 55→48 against 1→15), which alone would read as the referee
+shuffling between two non-hit buckets. Across all six runs `open` does **not** separate by the
+referee (54, 55, 64 leaky vs 48, 49, 58 isolated — overlapping), and in the off-diagonal cells it
+moves the wrong way for that story. So the `known` shift is not accounted for by `open`.
 
-The auditor's apparent pull on `hits` and `precision` is **not established**. The separation is
-clean but the margin is smaller than the spread inside either group, so the direction is
-suggestive at best and the magnitude is not estimable at this n. The same test applied to the
-original paired comparison above (precision 63,63 leaky vs 50,59 isolated) gives a gap of 4
-against a spread of 9 — so the "precision was inflated" reading of that table is weaker than it
-was first written, too.
+**Everything else is not established**, including the auditor's apparent pull on `hits` and
+`precision`: those groups separate, but by less than the widest within-group spread (for `hits` the gap merely equals the spread in the isolated group), so the
+direction is suggestive at best and the magnitude is not estimable at this n. The same test
+applied to the original paired comparison above (precision 63,63 leaky vs 50,59 isolated) gives a
+gap of 4 against a spread of 9 — the "precision was inflated" reading of that table is weaker
+than it was first written, too.
+
+**`empty` cuts against the tidy story** and is reported rather than dropped: it separates by
+neither role, and its single highest count (22) comes from an **isolated-auditor** run. "The leak
+made everything look better" is not what the full table says.
 
 **`core-recall` separates by neither role.** That is why the headline survived: whether an
 auditor caught the core materialized problem is robust to both leaks, while how its findings get

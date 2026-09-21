@@ -368,14 +368,15 @@ confound two changes):
 
 - **Core-recall survives.** The `/2nd`-earns-its-keep headline is not an artifact of the leak,
   and the isolated measurement is the steadier of the two.
-- **Precision was inflated in both pairs**, and `known` collapsed by an order of magnitude.
-  So the committed `hits`/`empty`/`precision` columns are the suspect ones — which is exactly the
-  channel that decides whether `/2nd` is worth the attention it spends (caveat #2).
+- **`known` collapsed by an order of magnitude**, and precision looked better under the leak.
+  Only the first of those survived scrutiny — see the 2026-09-21 entry: the precision gap is
+  smaller than the spread within either condition, so it is a reason to re-measure the committed
+  `hits`/`empty`/`precision` columns, not a finding about them.
 
-**What the design cannot separate, named rather than glossed.** The referee is a `claude()` call
-too, so it leaked as well. The `known` collapse may be a *scoring-side* effect — a referee
-holding the design record judges "already known" differently — not better objections. Both roles
-moved at once. Separating them needs a run that isolates one side only.
+**What this design could not separate, and what did.** The referee is a `claude()` call too, so
+it leaked as well: both roles moved at once, and the `known` collapse could have been better
+objections or a scorer judging "already known" differently. That was left open here and **settled
+by the 2026-09-21 entry below** — per-role isolation attributes it to the referee.
 
 That is the third time today a comparison looked clean until a second variable turned up in it
 (after `ru_query` and the nudge arm). The recurring error is not arithmetic; it is **believing an
@@ -393,9 +394,13 @@ arm differs in one respect when it differs in two**.
   by one role at a time: **`known` separates by the referee** (1, 2, 3 leaky vs 12, 13, 15
   isolated) — a **scoring-side** effect, not better objections: the gap is 9 against a
   within-group spread of 3. `hits` and `precision` group by the *auditor* instead, but their gaps
-  (2 and 4) are **smaller than the spread inside either group** (6 and 15), so that half is **not
+  (2 and 4) are **smaller than the widest within-group spread** (6 and 15), so that half is **not
   established** — non-overlap alone is too weak a test at three runs per group, and the same test
-  weakens the "precision was inflated" reading of the earlier paired table too. **`core-recall`
+  weakens the "precision was inflated" reading of the earlier paired table too. The `known` shift
+  is **not** just relabelled from `open`: across all six runs `open` does not separate by the
+  referee. `empty` separates by neither role, and its highest count comes from an
+  *isolated*-auditor run — reported because it cuts against "the leak made everything look
+  better". **`core-recall`
   separates by neither**, which is why the headline survived: whether an auditor caught the core
   problem is robust to both leaks; how its findings get *classified* is not.
 - The mode classifier and readiness evals also ran under the leak and are not re-checked at all.

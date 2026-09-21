@@ -194,8 +194,14 @@ const tally = Object.fromEntries(ARMS.map((a) => [a.key, zero()]));
 console.error(`/2nd A/B + ablation: ${DATASET} — ${CASES.length} cases x ${ARMS.length} arms x ${SAMPLES} samples (model=${MODEL}, other=${OTHER_MODEL})`);
 // Printed every run: a silent isolation regression would otherwise publish as a clean result.
 // Per role, from the EFFECTIVE flag each role's calls will use — the whole point of printing it.
-console.error(`  ${isolationReport("auditor", ISO_AUDITOR ?? isolationActive())}`);
-console.error(`  ${isolationReport("referee", ISO_REFEREE ?? isolationActive())}`);
+// On BOTH streams: the results table below goes to stdout, so `node second-opinion.mjs > run.log`
+// would otherwise capture the numbers with no record of which role was isolated — the exact
+// failure this line exists to prevent, and one this harness has already shipped once.
+for (const line of [isolationReport("auditor", ISO_AUDITOR ?? isolationActive()),
+                    isolationReport("referee", ISO_REFEREE ?? isolationActive())]) {
+  console.error(`  ${line}`);
+  console.log(`  ${line}`);
+}
 if (SKIPPED.length) console.error(`  arms NOT run this pass: ${SKIPPED.join(", ")}`);
 console.error("");
 

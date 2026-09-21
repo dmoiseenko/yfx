@@ -5,9 +5,13 @@
 > this repo put the yfx project guide and `gitStatus` there too. Fixed in `lib.mjs`; measured in
 > [`RESULTS-isolation.md`](RESULTS-isolation.md).
 >
-> What that costs this document: **core-recall is unaffected** (isolated runs were, if anything,
-> steadier), but **hits / empty / precision were inflated** in both paired runs — so treat the
-> precision columns below as an upper bound until they are re-measured. Issue #14 tracks it.
+> What that costs this document, as far as it has been measured: **core-recall is unaffected** by
+> either the auditor's or the referee's leak state. The **`known` classification is distorted** —
+> established, and it belongs to the referee. The **hits / empty / precision** columns moved in
+> the direction of looking better than they are, but that is **not established** at the n
+> available (the between-condition gaps are smaller than the spread within either condition), so
+> it is a reason to re-measure them, not a finding about them. Issue #14 tracks it;
+> [`RESULTS-isolation.md`](RESULTS-isolation.md) has the attribution.
 
 
 Harness: `second-opinion.mjs` over `second-dataset.jsonl` (8 plans from this repo's own design

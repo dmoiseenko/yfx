@@ -60,7 +60,12 @@ ISOLATE_AUDITOR=1 ISOLATE_REFEREE=0 node second-opinion.mjs   # only the scorer 
 ISOLATE_AUDITOR=0 ISOLATE_REFEREE=1 node second-opinion.mjs   # only the auditor leaks
 ```
 
-Unset flags follow `EVAL_ISOLATION`. Every run prints the **effective** state per role — check
+Both flags are read by `second-opinion.mjs` **only** — it is the harness with two roles. Setting
+them on `memory-provider.mjs`, `uu-audit.mjs` or the readiness harnesses is silently ignored;
+those follow `EVAL_ISOLATION`.
+
+Unset flags follow `EVAL_ISOLATION`. Every run prints the **effective** state per role, on stdout
+as well as stderr so a redirected run keeps the record — check
 that header before trusting a row; an earlier version printed the run-wide default under a role
 label and so lied in exactly the runs these flags exist for. That 2x2 is what attributed the
 `known` shift to the referee (`RESULTS-isolation.md`).
