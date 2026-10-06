@@ -182,14 +182,14 @@ const exportLabels = async ($: EngineInterface, given: string) => {
   const root = await exportRoot($, given)
   if (root === null) {
     return given === ''
-      ? 'yfx: not a yfx checkout here — export once with /yfx export <path to your yfx clone>.'
-      : `yfx: ${given} has no evals/score.mjs — not a yfx checkout.`
+      ? 'not a yfx checkout here — export once with /yfx export <path to your yfx clone>.'
+      : `${given} has no evals/score.mjs — not a yfx checkout.`
   }
   await $.store.set('export-root', root)
   const out = 'evals/out'
   const ignored = await $.process.run(['git', '-C', root, 'check-ignore', '-q', `${out}/live-dataset.jsonl`])
   if (ignored.exitCode !== 0) {
-    return `yfx: not exporting — ${root}/${out}/ is not gitignored, and the labels hold your prompts.`
+    return `not exporting — ${root}/${out}/ is not gitignored, and the labels hold your prompts.`
   }
   // Every project's labels: each file is one project's, named by its path.
   const dir = await labelsDir($)
@@ -198,7 +198,7 @@ const exportLabels = async ($: EngineInterface, given: string) => {
   for (const file of files) {
     if (file.kind === 'file' && file.name.endsWith('.jsonl')) labels.push(...(await readLabels($, `${dir}/${file.name}`)))
   }
-  if (labels.length === 0) return 'yfx: no labels yet.'
+  if (labels.length === 0) return 'no labels yet.'
   // dataset.jsonl's move shape (resolution: the answer, for the hindsight labeller) and
   // score.mjs's label shape; `RUN=live` points the harness at these names.
   const moves = labels.map(one => ({
@@ -220,14 +220,16 @@ const exportLabels = async ($: EngineInterface, given: string) => {
   await $.fs.write(`${root}/${out}/live-blind.jsonl`, jsonl(blind))
   const verdicts = labels.filter(one => one.skillVerdict !== undefined).length
   return (
-    `yfx: exported ${labels.length} labelled moves (${verdicts} with a skill verdict) to ` +
+    `exported ${labels.length} labelled moves (${verdicts} with a skill verdict) to ` +
     `${root}/${out}/live-{dataset,blind}.jsonl. Score: RUN=live node evals/classify.mjs mode ` +
     `&& RUN=live node evals/score.mjs`
   )
 }
 
+// Claude Code already prefixes a command's output with the plugin's name, so the text says no
+// "yfx:" of its own (it did, and read "yfx: yfx: ...").
 const HELP =
-  'yfx: /yfx · /yfx on|off nudge|lens|labels|all · ' +
+  'usage: /yfx · /yfx on|off nudge|lens|labels|all · ' +
   '/yfx label discovery|delivery [why] · /yfx export [path to yfx]'
 
 export const register: Register = on => {
@@ -358,7 +360,7 @@ async function runCommand($: EngineInterface, verb: string, arg: string, why: st
   if (verb === '' || verb === 'status') {
     const t = await refresh($)
     const count = (await readLabels($, await labelsFile($))).length
-    return `yfx: ${describe(t)} · ${count} labelled moves for this project.\n${HELP}`
+    return `${describe(t)} · ${count} labelled moves for this project.\n${HELP}`
   }
   if (verb === 'on' || verb === 'off') {
     const which: readonly Probe[] =
@@ -374,13 +376,13 @@ async function runCommand($: EngineInterface, verb: string, arg: string, why: st
       stuck.length > 0
         ? ` ${stuck.map(probe => `${probe} stays ${t[probe].on ? 'on' : 'off'} while ${ENV[probe]} is set`).join('; ')}.`
         : ''
-    return `yfx: ${describe(t)}.${note}`
+    return `${describe(t)}.${note}`
   }
   if (verb === 'label') {
     if (arg !== 'discovery' && arg !== 'delivery') return HELP
     const result = await saveLabel($, arg, why)
-    if (!result.saved) return `yfx: not labelled — ${result.reason}`
-    return `yfx: labelled ${result.id} as ${arg}. ${result.count} stored for this project.`
+    if (!result.saved) return `not labelled — ${result.reason}`
+    return `labelled ${result.id} as ${arg}. ${result.count} stored for this project.`
   }
   if (verb === 'export') return exportLabels($, [arg, why].filter(Boolean).join(' '))
   return HELP
