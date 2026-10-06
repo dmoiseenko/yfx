@@ -76,10 +76,17 @@ const loadToggles = async ($: EngineInterface): Promise<YfxToggles> => ({
   labels: (await $.store.get(await probeKey($, 'labels'))) === true,
 })
 
+// Claude Code pins a plugin's status as a notice under the prompt, with its own "yfx:" and a ⚠
+// mark, so the line says no name of its own, and is shown only while a probe is on: a standing
+// ⚠ for "everything off" reads as a fault.
 const showStatus = ($: EngineInterface, t: YfxToggles) => {
+  if (!t.nudge.on && !t.lens.on && !t.labels) {
+    $.ui.status(undefined)
+    return
+  }
   const dot = (on: boolean) => (on ? '●' : '○')
   const probe = (name: string, s: YfxProbeState) => `${name}${dot(s.on)}${s.by === 'env' ? '(env)' : ''}`
-  $.ui.status(`yfx ${probe('nudge', t.nudge)} ${probe('lens', t.lens)} labels${dot(t.labels)}`)
+  $.ui.status(`${probe('nudge', t.nudge)} ${probe('lens', t.lens)} labels${dot(t.labels)}`)
 }
 
 const describe = (t: YfxToggles) => {
@@ -335,17 +342,17 @@ export const register: Register = on => {
 
     return (
       <Box flexDirection="column">
-        <Box>
-          <Text dimColor>yfx · your last prompt was </Text>
+        <Box gap={1}>
+          <Text dimColor>yfx · your last prompt was</Text>
           <Button key="discovery" hotkey="1" label="discovery" onPress={label('discovery')} />
           <Button key="delivery" hotkey="2" label="delivery" onPress={label('delivery')} />
           <Button key="skip" hotkey="0" label="skip" onPress={() => update($, pending, () => null)} />
         </Box>
         {move.skills.length > 0 && (
-          <Box>
+          <Box gap={1}>
             <Text dimColor>
-              {move.skills.map(name => `/${name}`).join(' ')} this turn was{' '}
-              {move.skillVerdict === undefined ? '' : `${move.skillVerdict} · change: `}
+              {move.skills.map(name => `/${name}`).join(' ')} this turn was
+              {move.skillVerdict === undefined ? '' : ` ${move.skillVerdict} · change:`}
             </Text>
             <Button key="useful" hotkey="u" label="useful" onPress={verdict('useful')} />
             <Button key="noise" hotkey="n" label="noise" onPress={verdict('noise')} />
