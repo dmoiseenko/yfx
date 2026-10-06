@@ -43,13 +43,21 @@ for item in recall clarify fresh-lens 2nd xy-diagnosis.md memory-provider.md; do
   link "$REPO/skills/$item" "$DEST/skills/$item"
 done
 
-# The settings hooks this script used to link moved into mods/yfx. Remove links left by an older
-# install: they point at files that no longer exist, and a wired one would fail every prompt.
+# The settings hooks this script used to link moved into mods/yfx (hooks/ is gone). Clean up
+# after an older install: a link to a yfx hook that no longer resolves is removed, whatever path
+# it was made through, and a settings file still wiring one is named — its entry now fails on
+# every prompt / tool call until it is removed by hand (this script never edits settings).
 for hook in recall-context.mjs fresh-lens-trigger.mjs; do
-  if [ -L "$DEST/hooks/$hook" ] && [ "$(readlink "$DEST/hooks/$hook")" = "$REPO/hooks/$hook" ]; then
-    rm "$DEST/hooks/$hook"
-    echo "  removed stale hook link: ${DEST/#$HOME/~}/hooks/$hook (now in mods/yfx; unwire it from settings.json)"
+  link_path="$DEST/hooks/$hook"
+  if [ -L "$link_path" ] && [ ! -e "$link_path" ] && [[ "$(readlink "$link_path")" == */hooks/$hook ]]; then
+    rm "$link_path"
+    echo "  removed stale hook link: ${link_path/#$HOME/~}"
   fi
+  for settings in "$DEST/settings.json" "$DEST/settings.local.json"; do
+    if [ -f "$settings" ] && grep -q "$hook" "$settings"; then
+      echo "  WARNING: ${settings/#$HOME/~} still runs $hook — remove that hook entry; the mod replaces it."
+    fi
+  done
 done
 
 cat <<EOF
@@ -75,6 +83,9 @@ Done. Next steps:
      /yfx on nudge     # x/y diagnosis prompt on each substantive prompt you type
      /yfx on lens      # fresh-lens audit reminder at git commit / gh pr create / merge
      /yfx on labels    # ask you, after each turn, which mode your prompt was
+
+   Upgrading from the settings hooks: .claude/recall-loop.on and .claude/fresh-lens.on
+   markers no longer switch anything — use /yfx on nudge|lens in that project instead.
 
 3) To uninstall: remove the symlinks under $DEST/skills; /plugin uninstall yfx.
 EOF

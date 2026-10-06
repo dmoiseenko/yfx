@@ -12,6 +12,8 @@ export type YfxPending = {
   id: string
   prompt: string
   answer: string
+  /** Foresight only: whether the move came cold or warm in its session. */
+  context?: string
   skills: string[]
   skillVerdict?: YfxVerdict
   at: number

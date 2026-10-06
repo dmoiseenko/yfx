@@ -477,6 +477,20 @@ twice (worktree rules, env precedence). One owner removes the mirror instead of 
   loads inside a blind role.
 - `install.sh` links skills only and removes the stale hook links an older install left.
 
+Its one `/code-review` (the per-PR rule) found ten; all fixed in the PR. The ones that touched the
+framework's own measurements: a prompt typed over a running turn, or a headless (`claude -p`) one,
+got no nudge — so a `RECALL_LOOP=1` A/B arm would have looked exactly like its control; the
+export could never reach the yfx evals from another project, which is where most working
+sessions happen (now one remembered target, every project's labels); live moves reached the
+classifier with `context: live` and nothing else, under-informed next to the shipped dataset
+(now *cold / warm*, knowable before the move); and the provider-neutral guard on the nudge text
+had gone with the hook's tests (now `mods/yfx/prompts.test.mjs`, in `npm test` and CI). Also:
+labels append instead of rewrite (a torn line is kept, two sessions can't lose each other's
+label), label ids carry a random tail (the tests caught two moves in one millisecond merging),
+`label-blind.mjs`'s user-label guard tolerates spacing, the lens regex takes `git -C dir commit`,
+and `install.sh` names a settings file still wiring an old hook. A prompt typed over a running
+turn is not offered for a label — its answer is shared with the prompt before it.
+
 ## What shipped (done)
 
 - `/fresh-lens` skill (detect + audit), mandates embedded.

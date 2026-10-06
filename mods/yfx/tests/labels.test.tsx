@@ -61,6 +61,16 @@ const world = (
   on('fs.exists', (_$, e) => ({
     value: files.has(e.path) || [...files.keys()].some(path => path.startsWith(`${e.path}/`)),
   }))
+  on('fs.stat', (_$, e) => {
+    const text = files.get(e.path)
+    if (text === undefined) return { deny: 'ENOENT' }
+    return { value: { kind: 'file', size: new TextEncoder().encode(text).length, mtimeMs: 0, isLink: false } }
+  })
+  on('fs.list', (_$, e) => ({
+    value: [...files.keys()]
+      .filter(path => path.startsWith(`${e.path}/`) && !path.slice(e.path.length + 1).includes('/'))
+      .map(path => ({ name: path.slice(e.path.length + 1), kind: 'file' as const, size: 0, mtimeMs: 0, isLink: false })),
+  }))
   on('fs.read', (_$, e) => {
     if (e.path.endsWith('/prompts/xy-nudge.md')) return { value: 'NUDGE\n' }
     if (e.path.endsWith('/prompts/fresh-lens.md')) return { value: 'LENS\n' }
@@ -74,7 +84,10 @@ const world = (
   on('process.run', (_$, e) => {
     const [cmd, ...args] = e.argv
     let exitCode = 0
-    if (cmd === 'rm') for (const path of args.slice(1)) files.delete(path)
+    if (cmd === 'tee') {
+      const path = args[args.length - 1] ?? ''
+      files.set(path, (files.get(path) ?? '') + (e.init?.stdin ?? ''))
+    }
     let stdout = ''
     if (cmd === 'git' && args.includes('check-ignore')) exitCode = ignored.has(args[args.length - 1] ?? '') ? 0 : 1
     if (cmd === 'git' && args.includes('rev-parse')) stdout = '.git/info/exclude\n'
@@ -83,11 +96,13 @@ const world = (
     }
   })
   on('ui.status', () => ({ value: undefined }))
+  on('ui.toast', () => ({ value: undefined }))
   // The engine's own band: an empty box.
   on('ui.render', ($, e) => {
     const { Box } = $.ui.resolve(e)
     return <Box key="engine" />
   })
+  files.set(`${ROOT}/evals/score.mjs`, '// yfx')
   return { files, ignored, contexts }
 }
 
@@ -123,7 +138,7 @@ test('a labelled turn is kept outside the repo and exported with its skill verdi
   const stored = JSON.parse(files.get(labelsFile) ?? '{}')
   expect(stored.label).toBe('discovery')
   expect(stored.skillVerdict).toBe('useful')
-  expect([...files.keys()].some(path => path.startsWith(`${ROOT}/`))).toBe(false)
+  expect([...files.keys()].filter(path => path.startsWith(`${ROOT}/`))).toEqual([`${ROOT}/evals/score.mjs`])
 
   expect(await yfx($, 'export')).toContain('exported 1 labelled moves (1 with a skill verdict)')
   const blind = JSON.parse(files.get(`${ROOT}/evals/out/live-blind.jsonl`) ?? '{}')
@@ -133,7 +148,7 @@ test('a labelled turn is kept outside the repo and exported with its skill verdi
     id: blind.id,
     task: 'mode',
     prompt: PROMPT.text,
-    context: 'live',
+    context: 'live; cold — the first substantive prompt of the session',
     resolution: 'Three directions: ...',
     prior_claim: null,
     skills: ['clarify'],
@@ -151,7 +166,7 @@ test('export refuses where evals/out is not gitignored', async ($, on) => {
   expect(await yfx($, 'label delivery because')).toContain('labelled')
 
   expect(await yfx($, 'export')).toContain('not gitignored')
-  expect([...files.keys()].some(path => path.startsWith(`${ROOT}/`))).toBe(false)
+  expect(files.has(`${ROOT}/evals/out/live-blind.jsonl`)).toBe(false)
 })
 
 test('labels off: a turn asks nothing', async ($, on) => {
@@ -277,4 +292,57 @@ test('an unreadable line costs itself, not the labels around it', async ($, on) 
   const path = [...files.keys()].find(one => one.startsWith(LABELS_DIR)) ?? ''
   files.set(path, `${files.get(path)}{"torn\n`)
   expect(await yfx($, '')).toContain('1 labelled moves')
+})
+
+test('nudge: a prompt typed over a running turn, and a headless one, still get it', async ($, on) => {
+  const { contexts } = world(on, ROOT, {}, { [`nudge-on:${ROOT}`]: true })
+  await $.session.start({ cwd: ROOT, surface: 'terminal', isInteractive: true })
+  await $.prompt.submit({ ...PROMPT, turnId: 't1' })
+  await $.prompt.submit({ ...PROMPT, origin: { kind: 'sdk' } })
+  expect(contexts).toEqual([['NUDGE'], ['NUDGE']])
+})
+
+test('a prompt typed over a running turn is not offered for a label', async ($, on) => {
+  world(on, ROOT, {}, { [`labels-on:${ROOT}`]: true })
+  await $.session.start({ cwd: ROOT, surface: 'terminal', isInteractive: true })
+  await $.prompt.submit(PROMPT)
+  await $.prompt.submit({ ...PROMPT, text: 'и ещё уточнение к этому же вопросу про x', turnId: 't1' })
+  await $.turn.complete(answered('one answer to both'))
+  expect(await (await band($)).find({ key: 'discovery' })).toBeUndefined()
+})
+
+test('labels append: a torn line stays in the file, and a later prompt is warm', async ($, on) => {
+  const { files } = world(on, ROOT, {}, { [`labels-on:${ROOT}`]: true })
+  await $.session.start({ cwd: ROOT, surface: 'terminal', isInteractive: true })
+  await $.prompt.submit(PROMPT)
+  await $.turn.complete(answered('first'))
+  await yfx($, 'label discovery')
+  const path = [...files.keys()].find(one => one.startsWith(LABELS_DIR)) ?? ''
+  files.set(path, `${files.get(path)}{"torn\n`)
+  await $.prompt.submit({ ...PROMPT, text: 'второй содержательный вопрос про y' })
+  await $.turn.complete(answered('second', 't2'))
+  expect(await yfx($, 'label delivery')).toContain('2 stored')
+  const lines = (files.get(path) ?? '').trim().split('\n')
+  expect(lines).toHaveLength(3)
+  expect(lines[1]).toBe('{"torn')
+  expect(JSON.parse(lines[2] ?? '{}').context).toBe('live; warm — 1 earlier substantive prompt(s) this session')
+})
+
+test('export from another project goes to the remembered yfx checkout, with every project', async ($, on) => {
+  const { files } = world(on, '/work', {}, { [`labels-on:/work`]: true })
+  await $.session.start({ cwd: '/work', surface: 'terminal', isInteractive: true })
+  await $.prompt.submit(PROMPT)
+  await $.turn.complete(answered('ok'))
+  await yfx($, 'label delivery')
+  expect(await yfx($, 'export')).toContain('not a yfx checkout here')
+  expect(await yfx($, `export ${ROOT}`)).toContain('exported 1 labelled moves')
+  expect(files.has(`${ROOT}/evals/out/live-blind.jsonl`)).toBe(true)
+  expect(await yfx($, 'export')).toContain(`${ROOT}/evals/out`)
+})
+
+test('lens: git global options before commit still trigger it', async ($, on) => {
+  world(on, ROOT, {}, { [`lens-on:${ROOT}`]: true })
+  await $.session.start({ cwd: ROOT, surface: 'terminal', isInteractive: true })
+  expect((await bash($, 'git -C /repo/.claude/worktrees/wt commit -m x')).context).toEqual(['LENS'])
+  expect((await bash($, 'git commit-tree abc')).context).toBeUndefined()
 })

@@ -53,6 +53,6 @@ so it travels.
   pass on the fixes — each round of a high-effort review finds a fresh batch (PR #18: 10, then 10
   more), so repeated rounds don't converge. Say in the PR which findings were fixed, which were
   checked and rejected, and which are left as known limits.
-- `npm test` runs the eval and card claim-vs-measurement checks. Run it before committing a
-  change to a card. For the mod: `claude plugin validate mods/yfx` and
+- `npm test` runs the eval and card claim-vs-measurement checks and the mod's prompt-text guards
+  (`mods/yfx/prompts.test.mjs`). Run it before committing a change to a card or a prompt. For the mod: `claude plugin validate mods/yfx` and
   `claude plugin test mods/yfx` before committing a change to it.

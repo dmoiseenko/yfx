@@ -145,8 +145,10 @@ Everything in it is off until you turn it on, per project (`/yfx on nudge|lens|l
 status line marks that `(env)`. `/yfx on labels` starts asking,
 after each substantive turn, whether your prompt was *discovery* or *delivery* (and whether a yfx
 skill that fired was useful). Those are the user-supplied labels `evals/README.md` calls the gold
-tier. They are kept outside the repository (`~/.claude/yfx/labels/`, one file per project);
-`/yfx export` copies them into `evals/out/` only where that folder is gitignored, for
+tier. They are kept outside every repository (`~/.claude/yfx/labels/`, one append-only file per
+project), so any working session can feed the eval: `/yfx export` copies every project's labels
+into this checkout's `evals/out/` (give the path once from another project:
+`/yfx export ~/code/yfx`; refused unless that folder is gitignored), for
 `RUN=live node evals/score.mjs`.
 
 **The portable core (Codex, or any agent) — frozen.** Since 2026-10-06 the framework targets

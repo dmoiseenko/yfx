@@ -38,7 +38,10 @@ type PromptProbe = 'nudge' | 'lens'
 const ENV: Record<PromptProbe, string> = { nudge: 'RECALL_LOOP', lens: 'FRESH_LENS_TRIGGER' }
 // The unambiguous "a decision is locking" commands. Not a content or ambiguity check: detecting
 // ambiguity would re-import the executor's blindness the trigger exists to route around.
-const COMMITMENT = /\bgit\s+commit\b|\bgit\s+merge\b|\bgh\s+pr\s+(create|merge)\b/
+// git's global options may come first: `git -C <dir> commit`, `git -c k=v merge`,
+// `git --no-pager commit`.
+const COMMITMENT =
+  /\bgit(?:\s+(?:-[Cc]\s+\S+|--(?:git-dir|work-tree|namespace)(?:=|\s+)\S+|-{1,2}[\w-]+(?:=\S+)?))*\s+(?:commit|merge)(?![\w-])|\bgh\s+pr\s+(?:create|merge)(?![\w-])/
 const CLIP = 2000
 // $.fs reads and writes at most 4 MiB; stop short of it rather than fail inside a key press.
 const LABELS_MAX_BYTES = 3.5 * 1024 * 1024
@@ -107,30 +110,33 @@ const loadPrompt = async ($: EngineInterface, name: string) => {
 // Labels live in one JSONL file per project under the user's Claude directory: never inside a
 // repository (they hold prompts), never in $.store (one 4 MiB file shared by every project).
 const labelsFile = async ($: EngineInterface) => {
-  const home = (await $.env.get('CLAUDE_CONFIG_DIR')) ?? `${await $.env.get('HOME')}/.claude`
   const { main } = await roots($)
   // A readable name plus a hash of the whole path: `/a-b/c` and `/a/b-c` must not share a file.
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(main))
   const hash = [...new Uint8Array(digest).slice(0, 6)].map(b => b.toString(16).padStart(2, '0')).join('')
   const name = main.split('/').filter(Boolean).pop()?.replace(/[^A-Za-z0-9._-]+/g, '-') ?? 'root'
-  return `${home}/yfx/labels/${name}-${hash}.jsonl`
+  return `${await labelsDir($)}/${name}-${hash}.jsonl`
 }
 
-const storedLabels = async ($: EngineInterface, path: string): Promise<YfxLabel[]> => {
+// Every label is one appended line, never a rewrite: a hand-edited or torn line is skipped on
+// read but stays in the file, and two sessions sharing the file (a checkout and its worktrees)
+// cannot lose each other's labels. A relabel appends again; the last line for an id wins.
+const readLabels = async ($: EngineInterface, path: string): Promise<YfxLabel[]> => {
   if (!(await $.fs.exists(path))) return []
-  const text = await $.fs.read(path)
-  const labels: YfxLabel[] = []
+  const byId = new Map<string, YfxLabel>()
   let bad = 0
-  for (const line of text.split('\n')) {
+  for (const line of (await $.fs.read(path)).split('\n')) {
     if (line.trim() === '') continue
     try {
-      labels.push(JSON.parse(line) as YfxLabel)
+      const one = JSON.parse(line) as YfxLabel
+      byId.delete(one.id) // re-insert, so a relabel keeps its latest position
+      byId.set(one.id, one)
     } catch {
-      bad += 1 // a torn or hand-edited line costs itself, not every label before it
+      bad += 1
     }
   }
-  if (bad > 0) $.ui.toast(`yfx: skipped ${bad} unreadable line(s) in ${path}`)
-  return labels
+  if (bad > 0) $.ui.toast(`yfx: skipped ${bad} unreadable line(s) in ${path} (left in place)`)
+  return [...byId.values()]
 }
 
 // Labels the move pending NOW (with its verdict as it stands), never a copy a drawing captured;
@@ -142,45 +148,67 @@ const saveLabel = async ($: EngineInterface, label: YfxMode, why: string, expect
     return { saved: false as const, reason: 'no unlabelled move (labels must be on before the turn).' }
   }
   const path = await labelsFile($)
-  const labels = (await storedLabels($, path)).filter(one => one.id !== move.id)
-  const entry: YfxLabel = { ...move, label, why, source: 'user' }
-  const text = [...labels, entry].map(one => JSON.stringify(one)).join('\n') + '\n'
-  // The limit is in bytes; Cyrillic is two bytes a character in UTF-8.
-  if (new TextEncoder().encode(text).length > LABELS_MAX_BYTES) {
+  const line = JSON.stringify({ ...move, label, why, source: 'user' } satisfies YfxLabel) + '\n'
+  // The limit is in bytes ($.fs reads at most 4 MiB); Cyrillic is two bytes a character.
+  const size = (await $.fs.exists(path)) ? (await $.fs.stat(path)).size : 0
+  if (size + new TextEncoder().encode(line).length > LABELS_MAX_BYTES) {
     const reason = `${path} is full; export and move it aside to keep labelling.`
     $.ui.toast(`yfx: ${reason}`)
     return { saved: false as const, reason }
   }
-  await $.fs.write(path, text)
+  await $.process.run(['mkdir', '-p', path.slice(0, path.lastIndexOf('/'))])
+  const wrote = await $.process.run(['tee', '-a', path], { stdin: line })
+  if (wrote.exitCode !== 0) return { saved: false as const, reason: `could not append to ${path}.` }
   await update($, pending, cur => (cur?.id === move.id ? null : cur))
-  return { saved: true as const, id: move.id, count: labels.length + 1 }
+  return { saved: true as const, id: move.id, count: (await readLabels($, path)).length }
 }
 
-const exportLabels = async ($: EngineInterface) => {
-  const path = await labelsFile($)
-  const labels = await storedLabels($, path)
-  if (labels.length === 0) return 'yfx: no labels for this project yet.'
+const labelsDir = async ($: EngineInterface) =>
+  `${(await $.env.get('CLAUDE_CONFIG_DIR')) ?? `${await $.env.get('HOME')}/.claude`}/yfx/labels`
+
+// Where the labels go: the yfx checkout whose evals read them — from any project, since every
+// working session is eval data. Given once (`/yfx export <path>`), then remembered; the
+// session's own repository is the default only when it is that checkout.
+const exportRoot = async ($: EngineInterface, given: string) => {
+  const isYfx = async (dir: string) => $.fs.exists(`${dir}/evals/score.mjs`)
+  if (given !== '') return (await isYfx(given)) ? given : null
+  const saved = (await $.store.get('export-root')) as string | undefined
+  if (saved !== undefined && (await isYfx(saved))) return saved
   const { main } = await roots($)
-  const out = 'evals/out'
-  const ignored = await $.process.run([
-    'git', '-C', main, 'check-ignore', '-q', `${out}/live-dataset.jsonl`,
-  ])
-  if (ignored.exitCode !== 0) {
-    return (
-      `yfx: not exporting — ${out}/ is not gitignored here, and the labels hold your prompts. ` +
-      `They stay in ${path}.`
-    )
+  return (await isYfx(main)) ? main : null
+}
+
+const exportLabels = async ($: EngineInterface, given: string) => {
+  const root = await exportRoot($, given)
+  if (root === null) {
+    return given === ''
+      ? 'yfx: not a yfx checkout here — export once with /yfx export <path to your yfx clone>.'
+      : `yfx: ${given} has no evals/score.mjs — not a yfx checkout.`
   }
+  await $.store.set('export-root', root)
+  const out = 'evals/out'
+  const ignored = await $.process.run(['git', '-C', root, 'check-ignore', '-q', `${out}/live-dataset.jsonl`])
+  if (ignored.exitCode !== 0) {
+    return `yfx: not exporting — ${root}/${out}/ is not gitignored, and the labels hold your prompts.`
+  }
+  // Every project's labels: each file is one project's, named by its path.
+  const dir = await labelsDir($)
+  const files = (await $.fs.exists(dir)) ? await $.fs.list(dir) : []
+  const labels: YfxLabel[] = []
+  for (const file of files) {
+    if (file.kind === 'file' && file.name.endsWith('.jsonl')) labels.push(...(await readLabels($, `${dir}/${file.name}`)))
+  }
+  if (labels.length === 0) return 'yfx: no labels yet.'
   // dataset.jsonl's move shape (resolution: the answer, for the hindsight labeller) and
   // score.mjs's label shape; `RUN=live` points the harness at these names.
   const moves = labels.map(one => ({
     id: one.id,
     task: 'mode',
     prompt: one.prompt,
-    // Foresight only: classify.mjs shows `context` to the classifier, and which skills fired is
-    // hindsight (the agent's own reading of the move). It rides in `skills`, which no
+    // Foresight only: what was knowable before the move (warm or cold). Which skills fired is
+    // hindsight — the agent's own reading of the move — and rides in `skills`, which no
     // classifier reads.
-    context: 'live',
+    context: one.context ?? 'live',
     resolution: one.answer,
     prior_claim: null,
     skills: one.skills,
@@ -188,22 +216,24 @@ const exportLabels = async ($: EngineInterface) => {
   }))
   const blind = labels.map(one => ({ id: one.id, label: one.label, why: one.why, source: 'user' }))
   const jsonl = (rows: unknown[]) => rows.map(row => JSON.stringify(row)).join('\n') + '\n'
-  await $.fs.write(`${main}/${out}/live-dataset.jsonl`, jsonl(moves))
-  await $.fs.write(`${main}/${out}/live-blind.jsonl`, jsonl(blind))
+  await $.fs.write(`${root}/${out}/live-dataset.jsonl`, jsonl(moves))
+  await $.fs.write(`${root}/${out}/live-blind.jsonl`, jsonl(blind))
   const verdicts = labels.filter(one => one.skillVerdict !== undefined).length
   return (
     `yfx: exported ${labels.length} labelled moves (${verdicts} with a skill verdict) to ` +
-    `${out}/live-dataset.jsonl and live-blind.jsonl. Score: RUN=live node evals/classify.mjs mode ` +
+    `${root}/${out}/live-{dataset,blind}.jsonl. Score: RUN=live node evals/classify.mjs mode ` +
     `&& RUN=live node evals/score.mjs`
   )
 }
 
 const HELP =
   'yfx: /yfx · /yfx on|off nudge|lens|labels|all · ' +
-  '/yfx label discovery|delivery [why] · /yfx export'
+  '/yfx label discovery|delivery [why] · /yfx export [path to yfx]'
 
 export const register: Register = on => {
   let prompt: string | null = null
+  let context = 'live'
+  let moves = 0 // substantive user prompts this session (a reload restarts it)
   let nudge = ''
   let lensReminder = ''
 
@@ -211,7 +241,7 @@ export const register: Register = on => {
     await $.command.register({
       name: 'yfx',
       description: 'y=f(x): toggle the probes, label the last move, export labels',
-      argumentHint: '[on|off <probe> | label <mode> [why] | export]',
+      argumentHint: '[on|off <probe> | label <mode> [why] | export [path]]',
     })
     nudge = await loadPrompt($, 'xy-nudge')
     lensReminder = await loadPrompt($, 'fresh-lens')
@@ -236,16 +266,24 @@ export const register: Register = on => {
   })
 
   on('prompt.submit', async ($, e, next) => {
-    // Only the user's own typed (or Remote Control) prompt is a move; a prompt folded into a
-    // running turn, a notification, a peer's or a plugin's is not.
-    const isUsers = e.origin.kind === 'composer' || e.origin.kind === 'bridge'
-    if (!isUsers || e.turnId !== undefined) return next(e)
+    // The user's own prompt — typed, by Remote Control, or a headless run's (`claude -p`, where
+    // RECALL_LOOP=1 is how an A/B arm turns the nudge on). A notification's, a peer's or a
+    // plugin's is not.
+    const kind = e.origin.kind
+    if (kind !== 'composer' && kind !== 'bridge' && kind !== 'sdk') return next(e)
     const substantive = isSubstantive(e.text)
-    prompt = substantive ? e.text : null
-    await update($, skillsThisTurn, () => [])
     // A new prompt ends the chance to label the last one: a band still asking "your last
     // prompt was" during the next turn would get the new prompt's answer.
     await update($, pending, () => null)
+    await update($, skillsThisTurn, () => [])
+    // One typed over a running turn shares that turn's answer with the prompt before it, so
+    // neither is a move with an answer of its own: nothing is offered for a label.
+    prompt = substantive && e.turnId === undefined ? e.text : null
+    context =
+      moves === 0
+        ? 'live; cold — the first substantive prompt of the session'
+        : `live; warm — ${moves} earlier substantive prompt(s) this session`
+    if (substantive) moves += 1
     const t = await refresh($)
     if (!substantive || !t.nudge.on || nudge === '') return next(e)
     return next({ ...e, context: [...(e.context ?? []), nudge] })
@@ -269,9 +307,12 @@ export const register: Register = on => {
     if (e.reason === 'answer' && asked !== null && (await read($, toggles)).labels) {
       const at = await $.clock.now()
       const move: YfxPending = {
-        id: `L-${at.toString(36)}`,
+        // Time alone collides (two moves in one millisecond, or across projects in the shared
+        // export); a random tail keeps a relabel's "last line wins" from merging distinct moves.
+        id: `L-${at.toString(36)}-${[...crypto.getRandomValues(new Uint8Array(3))].map(b => b.toString(16).padStart(2, '0')).join('')}`,
         prompt: asked.slice(0, CLIP),
         answer: e.answer.slice(0, CLIP),
+        context,
         skills: await read($, skillsThisTurn),
         at,
       }
@@ -316,7 +357,7 @@ export const register: Register = on => {
 async function runCommand($: EngineInterface, verb: string, arg: string, why: string) {
   if (verb === '' || verb === 'status') {
     const t = await refresh($)
-    const count = (await storedLabels($, await labelsFile($))).length
+    const count = (await readLabels($, await labelsFile($))).length
     return `yfx: ${describe(t)} · ${count} labelled moves for this project.\n${HELP}`
   }
   if (verb === 'on' || verb === 'off') {
@@ -341,6 +382,6 @@ async function runCommand($: EngineInterface, verb: string, arg: string, why: st
     if (!result.saved) return `yfx: not labelled — ${result.reason}`
     return `yfx: labelled ${result.id} as ${arg}. ${result.count} stored for this project.`
   }
-  if (verb === 'export') return exportLabels($)
+  if (verb === 'export') return exportLabels($, [arg, why].filter(Boolean).join(' '))
   return HELP
 }
