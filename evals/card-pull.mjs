@@ -18,7 +18,7 @@
 //
 // ARMS
 //   pull     card on disk, reachable only through the skill's link (as shipped, hook off)
-//   nudge    pull + the x/y nudge prepended (as shipped WITH recall-context.mjs enabled). This
+//   nudge    pull + the x/y nudge prepended (as shipped with the mod's nudge probe on). This
 //            arm exists because gate 1 is exactly what the nudge hook is for, and the first run
 //            measured pull with the hook off — which is not how the framework ships when the
 //            loop is opted into. It doubles as the re-validation the nudge-only hook owes after
@@ -44,7 +44,8 @@ import { tmpdir, homedir } from "node:os";
 import { join } from "node:path";
 import { ROOT, REPO, MODEL } from "./lib.mjs";
 import { PROBE_TOOL, DECOY_TOOLS } from "./probe-mcp.mjs";
-import { XY_NUDGE } from "../hooks/recall-context.mjs";
+// The very text the yfx mod attaches (mods/yfx/prompts/xy-nudge.md), read from the same file.
+const XY_NUDGE = readFileSync(join(REPO, "mods", "yfx", "prompts", "xy-nudge.md"), "utf8").trim();
 
 const pexec = promisify(execFile);
 const KNOWN_ARMS = ["pull", "nudge", "push", "control"];
@@ -168,9 +169,9 @@ async function run(arm, gate, prompt, cfg) {
     let text = gate === "forced" ? `Use the /recall skill first, then answer: ${prompt}` : prompt;
     // The header is not decoration: a bare card starts with "---", which `claude -p` parses as a
     // flag and kills the run (it silently wiped the whole push arm once). A real injecting hook
-    // would label its block anyway, the way recall-context.mjs labels its own.
+    // would label its block anyway.
     if (arm === "push") text = `[memory] active provider card:\n\n${CARD}\n\nThe request:\n\n${text}`;
-    // Verbatim from the shipped hook, so this arm tests the real artifact rather than a paraphrase.
+    // Verbatim from the shipped mod, so this arm tests the real artifact rather than a paraphrase.
     if (arm === "nudge") text = `${XY_NUDGE}\n\n${text}`;
 
     const mcpConfig = JSON.stringify({

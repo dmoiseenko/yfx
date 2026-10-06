@@ -46,7 +46,7 @@ async function labelRoute(r) {
 const target = join(ROOT, "out", outName("blind.jsonl"));
 // Never replace the gold tier with the proxy: user labels (the yfx mod's export) are the truth
 // this script only stands in for.
-if (existsSync(target) && /"source":"user"/.test(readFileSync(target, "utf8"))) {
+if (existsSync(target) && /"source"\s*:\s*"user"/.test(readFileSync(target, "utf8"))) {
   console.error(`out/${outName("blind.jsonl")} holds user labels — not overwriting them with agent labels.`);
   process.exit(1);
 }

@@ -80,7 +80,7 @@ build*, not how you phrase it.
 
 ## Relation to the loop
 
-The `recall-context` hook nudges you to diagnose, every prompt, whether you lack
+The yfx mod's `nudge` probe asks you to diagnose, every substantive prompt, whether you lack
 **x** (→ /recall) or **y** (→ /clarify). This skill is the y-branch: a small,
 deliberate act of turning an ambiguous ask into a chosen direction before you
 spend effort in the wrong one.

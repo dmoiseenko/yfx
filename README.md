@@ -77,11 +77,9 @@ skills/
   memory-provider.md — symlink to the active provider card (npm run provider <name>)
 providers/        — memory provider cards: mem0, claude-mem, none (prose, not code)
 mods/
-  yfx/                      — Claude Code mod: /yfx probe toggles on the status line, and
-                              in-session user labels of each move's mode (the eval gold tier)
-hooks/
-  recall-context.mjs        — UserPromptSubmit: cheap always-on x/y nudge (no retrieval)
-  fresh-lens-trigger.mjs    — PreToolUse: exogenous audit trigger at commitment boundaries
+  yfx/                      — Claude Code mod: the always-on probes (x/y nudge, the
+                              commit-boundary fresh-lens trigger), /yfx toggles on the status
+                              line, and in-session user labels of each move's mode (gold tier)
 docs/
   convergence-protocol.md   — the protocol, discovery-vs-delivery modes, open UU/caveats
   uu-fresh-lens.md          — why UU need an independent lens; the cheap-artifact form
@@ -94,21 +92,18 @@ scripts/        — use-provider.mjs: switch the active provider card
 readiness.md    — the tool-agnostic core probe (frozen: the framework now targets Claude Code only)
 examples/
   AGENTS.md     — copy-in Codex wiring for the readiness probe (frozen)
-install.sh      — symlink skills + hooks into ~/.claude/
+install.sh      — symlink the skills into ~/.claude/
 ```
-
-Both hooks are **off by default** (toggle via an env var or a marker file — see each file's
-header), so installing them globally is dormant until you opt in per project.
 
 ## Getting started
 
 ```bash
 git clone https://github.com/dmoiseenko/yfx && cd yfx
-./install.sh          # symlink skills + hooks into ~/.claude/ (idempotent; --force to replace)
+./install.sh          # symlink the skills into ~/.claude/ (idempotent; --force to replace)
 ```
 
-That makes the probes available in every project you run Claude in. Alternatively symlink
-`skills/` + `hooks/` into a single project's `.claude/`, or copy them by hand — this repo is the
+That makes the skills available in every project you run Claude in; the always-on probes come
+with the mod (below). Alternatively symlink `skills/` into a single project's `.claude/`, or copy them by hand — this repo is the
 versioned source of truth, the install is just symlinks pointing back here.
 
 **Works with no dependencies:** `/clarify` (pick-a-direction) and `/fresh-lens` (spawns an
@@ -132,24 +127,29 @@ row is backed by an eval — a raw Russian query retrieves 21/24 target memories
 on claude-mem ([`evals/RESULTS-memory-provider.md`](evals/RESULTS-memory-provider.md)).
 `npm test` fails if a card claims a capability no run measured.
 
-**The mod.** `mods/yfx` runs inside Claude Code (a plugin of function hooks), where plain
-settings hooks can't reach: it draws, asks, and keeps state. Install it from a terminal session:
+**The mod.** `mods/yfx` runs inside Claude Code (a plugin of function hooks): it draws, asks,
+keeps state, and owns the framework's always-on probes. Install it from a terminal session:
 
 ```
 /plugin install yfx --marketplace dmoiseenko/yfx
 ```
 
-Everything in it is off until you turn it on, per project: `/yfx on labels` starts asking,
+Everything in it is off until you turn it on, per project (`/yfx on nudge|lens|labels|all`):
+
+- `nudge` attaches the x/y diagnosis prompt to each substantive prompt you type;
+- `lens` hands the model the fresh-lens audit reminder at every commitment boundary
+  (`git commit` / merge, `gh pr create` / merge), whatever it feels about the move;
+- `labels` (below).
+
+`RECALL_LOOP` / `FRESH_LENS_TRIGGER` (`1` or `0`) override `nudge` / `lens` for a session; the
+status line marks that `(env)`. `/yfx on labels` starts asking,
 after each substantive turn, whether your prompt was *discovery* or *delivery* (and whether a yfx
 skill that fired was useful). Those are the user-supplied labels `evals/README.md` calls the gold
-tier. They are kept outside the repository (`~/.claude/yfx/labels/`, one file per project);
-`/yfx export` copies them into `evals/out/` only where that folder is gitignored, for
-`RUN=live node evals/score.mjs`. `/yfx on nudge|lens` flips the marker files the hooks below
-read; the status line shows what the hooks will actually do, `(env)` when a variable decides.
-
-**Hooks are off by default.** `install.sh` links them in but they stay dormant until you wire them
-in `~/.claude/settings.json` and set each one's opt-in flag (`FRESH_LENS_TRIGGER=1`, or a
-`.claude/fresh-lens.on` marker) — the installer prints the exact snippet.
+tier. They are kept outside every repository (`~/.claude/yfx/labels/`, one append-only file per
+project), so any working session can feed the eval: `/yfx export` copies every project's labels
+into this checkout's `evals/out/` (give the path once from another project:
+`/yfx export ~/code/yfx`; refused unless that folder is gitignored), for
+`RUN=live node evals/score.mjs`.
 
 **The portable core (Codex, or any agent) — frozen.** Since 2026-10-06 the framework targets
 Claude Code only (why: [`docs/open-threads.md`](docs/open-threads.md)); what follows is kept
