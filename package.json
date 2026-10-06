@@ -4,7 +4,7 @@
   "private": true,
   "description": "y=f(x) — convergence probes for user/agent collaboration",
   "scripts": {
-    "test": "node --test hooks/*.test.mjs evals/*.test.mjs",
+    "test": "node --test evals/*.test.mjs",
     "eval:memory": "node evals/memory-provider.mjs",
     "provider": "node scripts/use-provider.mjs"
   }

@@ -28,19 +28,33 @@ const answered = (answer: string, turnId = 't1') => ({
   reason: 'answer' as const,
 })
 
-type World = { files: Map<string, string>; ignored: Set<string> }
+type World = {
+  files: Map<string, string>
+  ignored: Set<string>
+  contexts: (readonly string[] | undefined)[]
+}
 
 // The engine beneath the plugin: an in-memory filesystem, and git answering check-ignore from
 // `ignored` (paths relative to the checkout), as far as these tests reach it.
-const world = (on: On, root = ROOT, env: Record<string, string> = {}): World => {
+const world = (
+  on: On,
+  root = ROOT,
+  env: Record<string, string> = {},
+  store: Record<string, unknown> = {},
+): World => {
   const files = new Map<string, string>()
   const ignored = new Set<string>(['evals/out/live-dataset.jsonl'])
-  mock.store(on)
+  const contexts: (readonly string[] | undefined)[] = []
+  mock.store(on, store)
   mock.env(on, { HOME, ...env })
   mock.clock(on, { now: 1_000 })
   on('session.start', (_$, e) => ({ cwd: e.cwd }))
   on('command.register', (_$, e) => ({ value: { command: e.name } }))
-  on('prompt.submit', (_$, e) => ({ text: e.text, origin: e.origin }))
+  on('prompt.submit', (_$, e) => {
+    contexts.push(e.context)
+    return { text: e.text, origin: e.origin }
+  })
+  on('tool.call', () => ({ result: { stdout: '', stderr: '', interrupted: false } }))
   on('turn.complete', (_$, e) => ({ text: e.answer }))
   on('skill.prompt', (_$, e) => ({ text: e.text }))
   on('session.root', () => ({ value: root }))
@@ -48,6 +62,8 @@ const world = (on: On, root = ROOT, env: Record<string, string> = {}): World => 
     value: files.has(e.path) || [...files.keys()].some(path => path.startsWith(`${e.path}/`)),
   }))
   on('fs.read', (_$, e) => {
+    if (e.path.endsWith('/prompts/xy-nudge.md')) return { value: 'NUDGE\n' }
+    if (e.path.endsWith('/prompts/fresh-lens.md')) return { value: 'LENS\n' }
     const text = files.get(e.path)
     return text === undefined ? { deny: 'ENOENT' } : { value: text }
   })
@@ -72,7 +88,7 @@ const world = (on: On, root = ROOT, env: Record<string, string> = {}): World => 
     const { Box } = $.ui.resolve(e)
     return <Box key="engine" />
   })
-  return { files, ignored }
+  return { files, ignored, contexts }
 }
 
 const yfx = async ($: Engine, args: string) =>
@@ -169,50 +185,50 @@ test("another plugin's skill of the same name is not counted as a yfx skill", as
   expect(await ui.find({ key: 'useful' })).toBeUndefined()
 })
 
-test('from a worktree: on writes the main marker and keeps it uncommitted; off clears both', async ($, on) => {
-  const { files } = world(on, `${ROOT}/.claude/worktrees/wt`)
-  await $.session.start({ cwd: ROOT, surface: 'terminal', isInteractive: true })
+const bash = ($: Engine, command: string) =>
+  $.tool.call({ tool: 'Bash', command })
 
+test('nudge: attached to a substantive user prompt only while on', async ($, on) => {
+  const { contexts } = world(on)
+  await $.session.start({ cwd: ROOT, surface: 'terminal', isInteractive: true })
+  await $.prompt.submit(PROMPT)
   expect(await yfx($, 'on nudge')).toContain('nudge on')
-  expect(files.has(`${ROOT}/.claude/recall-loop.on`)).toBe(true)
-  // Where git says the exclude file is (a file `.git` in a submodule or linked worktree too).
-  expect(files.get(`${ROOT}/.git/info/exclude`)).toBe('.claude/recall-loop.on\n')
-
-  files.set(`${ROOT}/.claude/worktrees/wt/.claude/recall-loop.on`, '')
-  expect(await yfx($, 'off nudge')).toContain('nudge off')
-  expect(files.has(`${ROOT}/.claude/recall-loop.on`)).toBe(false)
-  expect(files.has(`${ROOT}/.claude/worktrees/wt/.claude/recall-loop.on`)).toBe(false)
+  await $.prompt.submit(PROMPT)
+  await $.prompt.submit({ ...PROMPT, text: 'да' })
+  await $.prompt.submit({ ...PROMPT, origin: { kind: 'task-notification' } })
+  expect(contexts).toEqual([undefined, ['NUDGE'], undefined, undefined])
 })
 
-test('a worktree-local marker shows as on, as the hook sees it', async ($, on) => {
-  const { files } = world(on, `${ROOT}/.claude/worktrees/wt`)
-  files.set(`${ROOT}/.claude/worktrees/wt/.claude/fresh-lens.on`, '')
-  await $.session.start({ cwd: ROOT, surface: 'terminal', isInteractive: true })
-  expect(await yfx($, '')).toContain('lens on')
-})
-
-test('an unignored marker is added to .git/info/exclude', async ($, on) => {
-  const { files } = world(on)
-  files.set(`${ROOT}/.git/info/exclude`, '# local\n.serena/')
-  await $.session.start({ cwd: ROOT, surface: 'terminal', isInteractive: true })
-  await yfx($, 'on lens')
-  expect(files.get(`${ROOT}/.git/info/exclude`)).toBe('# local\n.serena/\n.claude/fresh-lens.on\n')
-})
-
-test('RECALL_LOOP=0 wins over the marker, and the toggle says so', async ($, on) => {
-  world(on, ROOT, { RECALL_LOOP: '0' })
+test('nudge: RECALL_LOOP=0 wins over the toggle and says so — the evals\' clean control', async ($, on) => {
+  const { contexts } = world(on, ROOT, { RECALL_LOOP: '0' })
   await $.session.start({ cwd: ROOT, surface: 'terminal', isInteractive: true })
   const said = await yfx($, 'on nudge')
   expect(said).toContain('nudge off (set by env)')
-  expect(said).toContain('nudge stays off')
+  expect(said).toContain('nudge stays off while RECALL_LOOP is set')
+  await $.prompt.submit(PROMPT)
+  expect(contexts).toEqual([undefined])
 })
 
-test('FRESH_LENS_TRIGGER=0 is not an override: the hook only reads "1"', async ($, on) => {
-  world(on, ROOT, { FRESH_LENS_TRIGGER: '0' })
+test('lens: the reminder rides a commitment command\'s result, and nothing else', async ($, on) => {
+  world(on)
   await $.session.start({ cwd: ROOT, surface: 'terminal', isInteractive: true })
-  const said = await yfx($, 'on lens')
-  expect(said).toContain('lens on,')
-  expect(said).not.toContain('stays')
+  expect((await bash($, 'git commit -m x')).context).toBeUndefined()
+  await yfx($, 'on lens')
+  expect((await bash($, 'git commit -m x')).context).toEqual(['LENS'])
+  expect((await bash($, 'gh pr create --fill')).context).toEqual(['LENS'])
+  expect((await bash($, 'git status')).context).toBeUndefined()
+})
+
+test('probes are per project: on in one repository is off in another', async ($, on) => {
+  world(on, '/other', {}, { [`nudge-on:${ROOT}`]: true })
+  await $.session.start({ cwd: '/other', surface: 'terminal', isInteractive: true })
+  expect(await yfx($, '')).toContain('nudge off')
+})
+
+test('a worktree shares its main checkout\'s switches', async ($, on) => {
+  world(on, `${ROOT}/.claude/worktrees/wt`, {}, { [`lens-on:${ROOT}`]: true })
+  await $.session.start({ cwd: ROOT, surface: 'terminal', isInteractive: true })
+  expect(await yfx($, '')).toContain('lens on')
 })
 
 test('a new prompt drops the unlabelled move, and the band hides while a turn runs', async ($, on) => {
@@ -261,14 +277,4 @@ test('an unreadable line costs itself, not the labels around it', async ($, on) 
   const path = [...files.keys()].find(one => one.startsWith(LABELS_DIR)) ?? ''
   files.set(path, `${files.get(path)}{"torn\n`)
   expect(await yfx($, '')).toContain('1 labelled moves')
-})
-
-test('from below a worktree root, lens follows the hook and ignores the main marker', async ($, on) => {
-  const { files } = world(on, `${ROOT}/.claude/worktrees/wt/sub`)
-  files.set(`${ROOT}/.claude/fresh-lens.on`, '')
-  files.set(`${ROOT}/.claude/recall-loop.on`, '')
-  await $.session.start({ cwd: ROOT, surface: 'terminal', isInteractive: true })
-  const said = await yfx($, '')
-  expect(said).toContain('nudge on')
-  expect(said).toContain('lens off')
 })

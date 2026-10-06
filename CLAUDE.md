@@ -26,12 +26,13 @@ so it travels.
 
 - `skills/` — `recall` (fill x) · `clarify` (sharpen y) · `fresh-lens` (detect mode + audit for UU) · `xy-diagnosis.md` (Step 0) · `memory-provider.md` (symlink to the active provider card)
 - `providers/` — memory provider cards (`mem0`, `claude-mem`, `none`). A provider "plugin" is **prose the agent reads**, not a JS adapter: six declared capability axes, switched with `npm run provider <name>`. The `query_language` axis is measured, and `npm test` fails a card that claims more than a run measured.
-- `mods/yfx/` — the Claude Code mod (plugin of function hooks): `/yfx` probe toggles + status
-  line, and in-session user mode labels (eval gold tier) exported to `evals/out/`. The repo root's
+- `mods/yfx/` — the Claude Code mod (plugin of function hooks), owner of the always-on probes:
+  `nudge` (the x/y prompt, `prompts/xy-nudge.md`, attached to substantive user prompts), `lens`
+  (the fresh-lens reminder, `prompts/fresh-lens.md`, at commit boundaries), `labels` (in-session
+  user mode labels, the eval gold tier, exported to `evals/out/`); `/yfx` toggles + status line. The repo root's
   `.claude-plugin/marketplace.json` makes it installable. **Claude Code only** since 2026-10-06 —
   prefer a mod over a settings hook when a feature needs UI, state, or to act without the
   executor; `readiness.md` / `examples/AGENTS.md` are frozen.
-- `hooks/` — `recall-context.mjs` (UserPromptSubmit, x/y nudge only — it does **not** retrieve; see its header for why the harvest was removed) · `fresh-lens-trigger.mjs` (PreToolUse, exogenous audit trigger at commit boundaries). Both **off by default**, toggle per file header.
 - `docs/` — the design record (above).
 
 ## Conventions
@@ -40,8 +41,9 @@ so it travels.
   docs — in **English**.
 - Keep the framework honest: when you change a probe, check it against its own caveats in `docs/`.
   A change that contradicts a recorded decision must say so and re-argue it, not slip past.
-- Both hooks stay dormant unless explicitly toggled; don't wire them on by default. The same goes
-  for every probe in the mod: off until `/yfx on <probe>`.
+- Every probe in the mod stays off until `/yfx on <probe>`; don't turn any on by default. Prompt
+  text the model reads lives in `mods/yfx/prompts/` — the evals read the same files, so change
+  the words there, never a copy.
 - Nothing outside `providers/` may hardcode a memory provider's **tool or transport**. A skill or
   hook that does re-couples the framework; route through `skills/memory-provider.md` instead.
   Naming a provider in *rationale* is fine and sometimes required — `skills/recall/SKILL.md` says
@@ -51,6 +53,6 @@ so it travels.
   pass on the fixes — each round of a high-effort review finds a fresh batch (PR #18: 10, then 10
   more), so repeated rounds don't converge. Say in the PR which findings were fixed, which were
   checked and rejected, and which are left as known limits.
-- `npm test` runs the hook unit tests and the card claim-vs-measurement checks. Run it before
-  committing a change to a card or a hook. For the mod: `claude plugin validate mods/yfx` and
+- `npm test` runs the eval and card claim-vs-measurement checks. Run it before committing a
+  change to a card. For the mod: `claude plugin validate mods/yfx` and
   `claude plugin test mods/yfx` before committing a change to it.

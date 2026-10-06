@@ -451,6 +451,32 @@ Unit-tested (`claude plugin test`, 14); **not yet used in vivo** — the open ri
 same over-ask failure the framework found in `/clarify`. Next candidate: the independent lens run
 by the mod itself (`$.agent`) at the commit boundary, shown to the user, not the executor.
 
+## Update 2026-10-06 (later) — the mod owns the probes; the settings hooks are gone
+
+`hooks/recall-context.mjs` and `hooks/fresh-lens-trigger.mjs` moved into `mods/yfx` as the
+`nudge` and `lens` probes, and the hooks directory is deleted. Why: the mod had to re-implement
+both hooks' toggle rules to show their state, and `/code-review` caught that mirror drifting
+twice (worktree rules, env precedence). One owner removes the mirror instead of policing it.
+
+- **Same words, one file.** The texts moved verbatim to `mods/yfx/prompts/{xy-nudge,fresh-lens}.md`;
+  `evals/card-pull.mjs`'s `nudge` arm reads the same file, so the eval still replays the shipped
+  artifact.
+- **Channel, re-argued.** The plan was `prompt.compose` (a system-prompt section — cache-cheap).
+  Rejected: nothing in the API says a composed section stays out of subagents, and the fresh-lens
+  auditor is a subagent whose value is that it does *not* share the executor's framing. The nudge
+  rides `prompt.submit`'s context on the user's own substantive prompts — the old hook's exact
+  channel, so the delivered thing is unchanged (still unvalidated since retrieval was stripped).
+- **lens** adds the reminder to the commitment command's result — where a PreToolUse hook's
+  `additionalContext` landed too: the model cannot read anything between deciding a call and its
+  running. Non-blocking, as before. The reminder's "before finalizing" wording is therefore a
+  little optimistic for `git commit` itself (the commit has run); unchanged, since it is the text
+  the evals replay.
+- **Switches.** Per project in the mod's store; no marker files, nothing to gitignore.
+  `RECALL_LOOP` / `FRESH_LENS_TRIGGER` still override (`1`/`0`), so the A/B control
+  (`RECALL_LOOP=0`) still works. Eval subprocesses run with a scratch config dir, so the mod never
+  loads inside a blind role.
+- `install.sh` links skills only and removes the stale hook links an older install left.
+
 ## What shipped (done)
 
 - `/fresh-lens` skill (detect + audit), mandates embedded.

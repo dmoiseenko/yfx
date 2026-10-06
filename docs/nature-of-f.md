@@ -28,8 +28,9 @@ The README says `f` is "roughly fixed… you don't retrain it, you condition it"
 not the input:
 
 - **x-levers** — change what `f` is conditioned on: `/recall` (fill x), `/clarify` (sharpen y).
-- **f-levers** — change or augment the transformation itself: choosing the model, the hooks in this
-  repo (`recall-context`, `fresh-lens-trigger`), and — most importantly — `/fresh-lens`, which does
+- **f-levers** — change or augment the transformation itself: choosing the model, the always-on
+  probes in this repo (the mod's `nudge` and `lens`, formerly the `recall-context` and
+  `fresh-lens-trigger` hooks), and — most importantly — `/fresh-lens`, which does
   **not** modify `x`; it adds a *second, independent operator alongside `f`*.
 
 So the "x is the only knob" claim is a within-session truth, not the whole story. The framework

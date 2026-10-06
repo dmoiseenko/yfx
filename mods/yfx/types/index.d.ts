@@ -2,8 +2,8 @@ export type YfxMode = 'discovery' | 'delivery'
 
 export type YfxVerdict = 'useful' | 'noise'
 
-/** A hook-backed probe as the hook will actually see it: `env` when a variable decides. */
-export type YfxProbeState = { on: boolean; by: 'marker' | 'env' }
+/** A prompt probe as it will act: `env` when RECALL_LOOP / FRESH_LENS_TRIGGER decides. */
+export type YfxProbeState = { on: boolean; by: 'toggle' | 'env' }
 
 export type YfxToggles = { nudge: YfxProbeState; lens: YfxProbeState; labels: boolean }
 

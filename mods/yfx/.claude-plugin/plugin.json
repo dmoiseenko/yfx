@@ -1,6 +1,6 @@
 {
   "name": "yfx",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "y=f(x) in Claude Code: probe toggles on the status line, and in-session user labels (the eval gold tier)",
   "author": {
     "name": "Denis Moiseenko"

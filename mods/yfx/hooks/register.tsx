@@ -1,18 +1,21 @@
-// yfx in Claude Code. Two things the plain settings hooks cannot do:
+// yfx in Claude Code: the framework's always-on probes, owned by one mod.
 //
-// 1. Visible toggles. The probes stay off by default (CLAUDE.md); `/yfx on|off <probe>` flips
-//    them and the status line says what is on. `nudge` and `lens` are the marker files the hooks
-//    in hooks/*.mjs read (.claude/recall-loop.on, .claude/fresh-lens.on), and the state shown is
-//    the hooks' own rule, re-implemented here because a mod cannot import a Node module: a marker
-//    in this checkout OR in the main one (worktrees live at <main>/.claude/worktrees/<name>),
-//    unless an environment variable decides first. Keep effective() in step with the hooks.
+// 1. Probes, each off by default (CLAUDE.md) and per project; `/yfx on|off <probe>` flips them
+//    and the status line says what is on.
+//    - nudge: the x/y diagnosis prompt (prompts/xy-nudge.md), attached to each substantive prompt
+//      the user types — what the UserPromptSubmit hook hooks/recall-context.mjs did. It rides the
+//      prompt, not the system prompt: a system-prompt section could reach a subagent, and the
+//      fresh-lens auditor must stay free of the executor's framing.
+//    - lens: at a commitment boundary (git commit / merge, gh pr create / merge) the model gets
+//      the fresh-lens reminder (prompts/fresh-lens.md) beside the command's result — what the
+//      PreToolUse hook hooks/fresh-lens-trigger.mjs did. Non-blocking, as before.
+//    RECALL_LOOP / FRESH_LENS_TRIGGER still decide first when set (1/true/on/yes or
+//    0/false/off/no): the evals use RECALL_LOOP=0 as the clean control.
 // 2. The gold tier (evals/README.md, Open UU #4): after a substantive turn, a band above the
 //    prompt asks the user which mode their prompt was. Only the user knows their private intent;
 //    every other label in evals/ is the designer's or an agent's proxy. Labels are kept per
 //    project, outside every repository; `/yfx export` copies this project's into evals/out/ for
 //    `RUN=live node evals/score.mjs`, and only where that folder is gitignored.
-//
-// It does not classify, nudge or audit by itself — that is still the hooks and skills.
 
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
@@ -20,8 +23,8 @@ import type { EngineInterface, Register } from 'claude-code'
 import type { YfxLabel, YfxMode, YfxPending, YfxProbeState, YfxToggles, YfxVerdict } from '../types'
 
 const OFF: YfxToggles = {
-  nudge: { on: false, by: 'marker' },
-  lens: { on: false, by: 'marker' },
+  nudge: { on: false, by: 'toggle' },
+  lens: { on: false, by: 'toggle' },
   labels: false,
 }
 const toggles = atom({ plugin: 'yfx', key: 'toggles' } as const, OFF)
@@ -29,63 +32,45 @@ const pending = atom({ plugin: 'yfx', key: 'pending' } as const, null)
 const skillsThisTurn = atom({ plugin: 'yfx', key: 'skillsThisTurn' } as const, [])
 
 const YFX_SKILLS = new Set(['recall', 'clarify', 'fresh-lens', '2nd'])
-const MARKERS = { nudge: 'recall-loop.on', lens: 'fresh-lens.on' } as const
 const PROBES = ['nudge', 'lens', 'labels'] as const
 type Probe = (typeof PROBES)[number]
-type HookProbe = 'nudge' | 'lens'
+type PromptProbe = 'nudge' | 'lens'
+const ENV: Record<PromptProbe, string> = { nudge: 'RECALL_LOOP', lens: 'FRESH_LENS_TRIGGER' }
+// The unambiguous "a decision is locking" commands. Not a content or ambiguity check: detecting
+// ambiguity would re-import the executor's blindness the trigger exists to route around.
+const COMMITMENT = /\bgit\s+commit\b|\bgit\s+merge\b|\bgh\s+pr\s+(create|merge)\b/
 const CLIP = 2000
 // $.fs reads and writes at most 4 MiB; stop short of it rather than fail inside a key press.
 const LABELS_MAX_BYTES = 3.5 * 1024 * 1024
 
-// Same bar as hooks/recall-context.mjs: a trivial reply is not a move worth labelling.
+// A trivial reply ("ok", "да") is neither worth a nudge nor a move worth labelling.
 const isSubstantive = (text: string) =>
   text.trim().length >= 20 && /[A-Za-zА-Яа-яЁё]/.test(text)
 
-// The main checkout behind a worktree (<main>/.claude/worktrees/<name>), by each hook's own rule:
-// recall-context.mjs cuts at the first `/.claude/worktrees/` anywhere in the path, while
-// fresh-lens-trigger.mjs only matches a path that ends at the worktree's root.
-const MAIN_OF: Record<HookProbe, (dir: string) => string> = {
-  nudge: dir => {
-    const at = dir.indexOf('/.claude/worktrees/')
-    return at === -1 ? dir : dir.slice(0, at)
-  },
-  lens: dir => dir.match(/^(.*)\/\.claude\/worktrees\/[^/]+$/)?.[1] ?? dir,
-}
-
+// The repository's main checkout: a worktree at <main>/.claude/worktrees/<name> shares its
+// switches and its labels.
 const roots = async ($: EngineInterface) => {
   const here = await $.session.root()
-  return { here, main: MAIN_OF.nudge(here) }
+  const at = here.indexOf('/.claude/worktrees/')
+  return { here, main: at === -1 ? here : here.slice(0, at) }
 }
 
-const markerPaths = async ($: EngineInterface, probe: HookProbe) => {
-  const here = await $.session.root()
-  return [...new Set([here, MAIN_OF[probe](here)])].map(root => `${root}/.claude/${MARKERS[probe]}`)
-}
+// Per project: turning a probe on in one repository must not turn it on in every other.
+const probeKey = async ($: EngineInterface, probe: Probe) => `${probe}-on:${(await roots($)).main}`
 
-// What the hook will do, by the hook's own precedence.
-const effective = async ($: EngineInterface, probe: HookProbe): Promise<YfxProbeState> => {
-  if (probe === 'nudge') {
-    // recall-context.mjs: an explicit falsy RECALL_LOOP forces off, a truthy one forces on.
-    const value = (await $.env.get('RECALL_LOOP')) ?? ''
-    if (/^(0|false|off|no)$/i.test(value)) return { on: false, by: 'env' }
-    if (/^(1|true|on|yes)$/i.test(value)) return { on: true, by: 'env' }
-  } else if ((await $.env.get('FRESH_LENS_TRIGGER')) === '1') {
-    // fresh-lens-trigger.mjs: only "1" turns it on; nothing turns it off.
-    return { on: true, by: 'env' }
-  }
-  for (const path of await markerPaths($, probe)) {
-    if (await $.fs.exists(path)) return { on: true, by: 'marker' }
-  }
-  return { on: false, by: 'marker' }
+const effective = async ($: EngineInterface, probe: PromptProbe): Promise<YfxProbeState> => {
+  // Literal names: the engine lists the variables a module reads from its source.
+  const value =
+    (probe === 'nudge' ? await $.env.get('RECALL_LOOP') : await $.env.get('FRESH_LENS_TRIGGER')) ?? ''
+  if (/^(0|false|off|no)$/i.test(value)) return { on: false, by: 'env' }
+  if (/^(1|true|on|yes)$/i.test(value)) return { on: true, by: 'env' }
+  return { on: (await $.store.get(await probeKey($, probe))) === true, by: 'toggle' }
 }
-
-// Per project: turning labels on in one repository must not start asking in every other.
-const labelsOnKey = async ($: EngineInterface) => `labels-on:${(await roots($)).main}`
 
 const loadToggles = async ($: EngineInterface): Promise<YfxToggles> => ({
   nudge: await effective($, 'nudge'),
   lens: await effective($, 'lens'),
-  labels: (await $.store.get(await labelsOnKey($))) === true,
+  labels: (await $.store.get(await probeKey($, 'labels'))) === true,
 })
 
 const showStatus = ($: EngineInterface, t: YfxToggles) => {
@@ -106,42 +91,17 @@ const refresh = async ($: EngineInterface) => {
   return t
 }
 
-// A marker is a local opt-in: keep it out of commits, or one `git add -A` turns the probe on for
-// every clone. Where the repository does not ignore it, ignore it locally (.git/info/exclude).
-// Returns a warning when the marker could not be kept out of commits.
-const keepUncommitted = async ($: EngineInterface, root: string, probe: HookProbe) => {
-  const rel = `.claude/${MARKERS[probe]}`
-  const ignored = await $.process.run(['git', '-C', root, 'check-ignore', '-q', rel])
-  if (ignored.exitCode !== 1) return '' // 0: ignored already; 128: not a git checkout
-  // Ask git where the file is: `.git` is a file in a submodule or a linked worktree.
-  const where = await $.process.run(['git', '-C', root, 'rev-parse', '--git-path', 'info/exclude'])
-  const found = where.stdout.trim()
-  if (where.exitCode !== 0 || found === '') return ` ${rel} is not gitignored here — do not commit it.`
-  const exclude = found.startsWith('/') ? found : `${root}/${found}`
-  try {
-    const text = (await $.fs.exists(exclude)) ? await $.fs.read(exclude) : ''
-    await $.fs.write(exclude, `${text}${text === '' || text.endsWith('\n') ? '' : '\n'}${rel}\n`)
-    return ''
-  } catch {
-    return ` ${rel} is not gitignored here and ${exclude} could not be written — do not commit it.`
-  }
-}
+const setProbe = async ($: EngineInterface, probe: Probe, on: boolean) =>
+  $.store.set(await probeKey($, probe), on)
 
-// Returns a warning for the user, or ''.
-const setProbe = async ($: EngineInterface, probe: Probe, on: boolean) => {
-  if (probe === 'labels') {
-    await $.store.set(await labelsOnKey($), on)
+// The texts the model reads, kept as files so evals/card-pull.mjs replays the very same words.
+const loadPrompt = async ($: EngineInterface, name: string) => {
+  try {
+    return (await $.fs.read(`${$.plugin.root}/prompts/${name}.md`)).trim()
+  } catch {
+    $.ui.toast(`yfx: prompts/${name}.md is missing; that probe stays silent.`)
     return ''
   }
-  if (on) {
-    // The main checkout's marker: one switch for the repository, its worktrees included.
-    const main = MAIN_OF[probe](await $.session.root())
-    await $.fs.write(`${main}/.claude/${MARKERS[probe]}`, '')
-    return keepUncommitted($, main, probe)
-  }
-  // Off means off wherever the hook would look.
-  await $.process.run(['rm', '-f', ...(await markerPaths($, probe))])
-  return ''
 }
 
 // Labels live in one JSONL file per project under the user's Claude directory: never inside a
@@ -244,6 +204,8 @@ const HELP =
 
 export const register: Register = on => {
   let prompt: string | null = null
+  let nudge = ''
+  let lensReminder = ''
 
   on('session.start', async ($, e, next) => {
     await $.command.register({
@@ -251,6 +213,8 @@ export const register: Register = on => {
       description: 'y=f(x): toggle the probes, label the last move, export labels',
       argumentHint: '[on|off <probe> | label <mode> [why] | export]',
     })
+    nudge = await loadPrompt($, 'xy-nudge')
+    lensReminder = await loadPrompt($, 'fresh-lens')
     await refresh($)
     return next(e)
   })
@@ -275,15 +239,26 @@ export const register: Register = on => {
     // Only the user's own typed (or Remote Control) prompt is a move; a prompt folded into a
     // running turn, a notification, a peer's or a plugin's is not.
     const isUsers = e.origin.kind === 'composer' || e.origin.kind === 'bridge'
-    if (isUsers && e.turnId === undefined) {
-      prompt = isSubstantive(e.text) ? e.text : null
-      await update($, skillsThisTurn, () => [])
-      // A new prompt ends the chance to label the last one: a band still asking "your last
-      // prompt was" during the next turn would get the new prompt's answer.
-      await update($, pending, () => null)
-    }
-    return next(e)
+    if (!isUsers || e.turnId !== undefined) return next(e)
+    const substantive = isSubstantive(e.text)
+    prompt = substantive ? e.text : null
+    await update($, skillsThisTurn, () => [])
+    // A new prompt ends the chance to label the last one: a band still asking "your last
+    // prompt was" during the next turn would get the new prompt's answer.
+    await update($, pending, () => null)
+    const t = await refresh($)
+    if (!substantive || !t.nudge.on || nudge === '') return next(e)
+    return next({ ...e, context: [...(e.context ?? []), nudge] })
   }).catch(($, e, next) => next(e)) // a labelling bug must never block the user's prompt
+
+  // The exogenous audit trigger: fires on the event, whatever the executor feels about the move.
+  // The model reads the reminder beside the command's result, as it read the PreToolUse hook's.
+  on('tool.call', { tool: 'Bash' }, async ($, e, next) => {
+    const ran = await next(e)
+    if (ran.deny !== undefined || lensReminder === '' || !COMMITMENT.test(e.command)) return ran
+    if (!(await effective($, 'lens')).on) return ran
+    return { ...ran, context: [...(ran.context ?? []), lensReminder] }
+  })
 
   on('turn.complete', async ($, e, next) => {
     if (e.agentId !== undefined) return next(e)
@@ -348,17 +323,17 @@ async function runCommand($: EngineInterface, verb: string, arg: string, why: st
     const which: readonly Probe[] =
       arg === 'all' ? PROBES : PROBES.includes(arg as Probe) ? [arg as Probe] : []
     if (which.length === 0) return HELP
-    let warnings = ''
-    for (const probe of which) warnings += await setProbe($, probe, verb === 'on')
+    for (const probe of which) await setProbe($, probe, verb === 'on')
     const t = await refresh($)
     const stuck = which.filter(
-      (probe): probe is HookProbe => probe !== 'labels' && t[probe].by === 'env' && t[probe].on !== (verb === 'on'),
+      (probe): probe is PromptProbe =>
+        probe !== 'labels' && t[probe].by === 'env' && t[probe].on !== (verb === 'on'),
     )
     const note =
       stuck.length > 0
-        ? ` ${stuck.join(', ')} stays ${verb === 'on' ? 'off' : 'on'}: an environment variable decides it for the hook.`
+        ? ` ${stuck.map(probe => `${probe} stays ${t[probe].on ? 'on' : 'off'} while ${ENV[probe]} is set`).join('; ')}.`
         : ''
-    return `yfx: ${describe(t)}.${note}${warnings}`
+    return `yfx: ${describe(t)}.${note}`
   }
   if (verb === 'label') {
     if (arg !== 'discovery' && arg !== 'delivery') return HELP

@@ -84,11 +84,11 @@ NEW axis (converts the UU into a known-unknown permanently).
 The **audit** mode has a trap: a blind executor can't feel which moves are blind, so the
 moves that most need auditing are the confident ones you'd never self-flag. If *you* decide
 when to run it, the safeguard inherits your blindness at the trigger. So the trigger is made
-exogenous: a PreToolUse hook (`.claude/hooks/fresh-lens-trigger.mjs`) fires at every
-**commitment boundary** — `git commit` / `gh pr create` / merge — injecting a reminder to run
-the audit before the decision locks, regardless of how confident you feel. It does NOT detect
-ambiguity (that would re-import the blindness); it fires on the event. Off by default; enable
-with `FRESH_LENS_TRIGGER=1` or `touch .claude/fresh-lens.on`. (Still open: moves that lock a
+exogenous: the yfx mod's `lens` probe fires at every **commitment boundary** — `git commit` /
+`gh pr create` / merge — handing you a reminder to run the audit beside the command's result,
+regardless of how confident you feel. It does NOT detect ambiguity (that would re-import the
+blindness); it fires on the event. Off by default; enable with `/yfx on lens` (or
+`FRESH_LENS_TRIGGER=1`). (Still open: moves that lock a
 decision without a commit — see the Open-UU block in [[convergence-protocol]].)
 
 ## Relation to the loop

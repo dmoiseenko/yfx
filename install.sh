@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Install the yfx skills + hooks into your user-global ~/.claude/ by symlink,
+# Install the yfx skills into your user-global ~/.claude/ by symlink,
 # so /recall, /clarify, /fresh-lens are available in every project you run Claude in.
 # This repo stays the source of truth; the install is just symlinks pointing back here.
 #
@@ -7,8 +7,8 @@
 #   ./install.sh --force    # replace existing yfx symlinks
 #   CLAUDE_HOME=/path ./install.sh   # install somewhere other than ~/.claude
 #
-# Hooks are copied in but stay OFF until you (1) wire them in settings.json and
-# (2) opt in per the flag in each hook's header — see the notes printed at the end.
+# The always-on probes (x/y nudge, commit-boundary fresh-lens trigger, user labels) are not
+# installed here: they live in the mods/yfx Claude Code mod — see the notes printed at the end.
 
 set -euo pipefail
 
@@ -34,7 +34,7 @@ link() { # link <src> <dst>
 }
 
 echo "Installing yfx from $REPO into ${DEST/#$HOME/~}"
-mkdir -p "$DEST/skills" "$DEST/hooks"
+mkdir -p "$DEST/skills"
 
 echo "skills:"
 # memory-provider.md is itself a symlink into providers/, so the installed link resolves through
@@ -43,9 +43,13 @@ for item in recall clarify fresh-lens 2nd xy-diagnosis.md memory-provider.md; do
   link "$REPO/skills/$item" "$DEST/skills/$item"
 done
 
-echo "hooks (dormant until wired + enabled):"
+# The settings hooks this script used to link moved into mods/yfx. Remove links left by an older
+# install: they point at files that no longer exist, and a wired one would fail every prompt.
 for hook in recall-context.mjs fresh-lens-trigger.mjs; do
-  link "$REPO/hooks/$hook" "$DEST/hooks/$hook"
+  if [ -L "$DEST/hooks/$hook" ] && [ "$(readlink "$DEST/hooks/$hook")" = "$REPO/hooks/$hook" ]; then
+    rm "$DEST/hooks/$hook"
+    echo "  removed stale hook link: ${DEST/#$HOME/~}/hooks/$hook (now in mods/yfx; unwire it from settings.json)"
+  fi
 done
 
 cat <<EOF
@@ -62,24 +66,15 @@ Done. Next steps:
    "none" is supported, not broken: /recall still runs the diagnosis and falls back
    to the code, git log, and asking the user.
 
-2) Hooks are OFF by default. To actually run them, add them to $DEST/settings.json:
+2) The always-on probes come with the yfx mod. In a Claude Code terminal session:
 
-     {
-       "hooks": {
-         "UserPromptSubmit": [
-           { "hooks": [{ "type": "command", "command": "node ~/.claude/hooks/recall-context.mjs" }] }
-         ],
-         "PreToolUse": [
-           { "hooks": [{ "type": "command", "command": "node ~/.claude/hooks/fresh-lens-trigger.mjs" }] }
-         ]
-       }
-     }
+     /plugin install yfx --marketplace dmoiseenko/yfx
 
-   Then opt in per hook: fresh-lens-trigger needs FRESH_LENS_TRIGGER=1 (or a
-   .claude/fresh-lens.on marker file); recall-context needs RECALL_LOOP=1 (or a
-   .claude/recall-loop.on marker). See each hook's header for its flag.
-   recall-context injects only the x/y nudge — it does not retrieve, so it needs
-   no memory provider running.
+   Everything in it is off until you turn it on, per project:
 
-3) To uninstall: remove the symlinks under $DEST/skills and $DEST/hooks.
+     /yfx on nudge     # x/y diagnosis prompt on each substantive prompt you type
+     /yfx on lens      # fresh-lens audit reminder at git commit / gh pr create / merge
+     /yfx on labels    # ask you, after each turn, which mode your prompt was
+
+3) To uninstall: remove the symlinks under $DEST/skills; /plugin uninstall yfx.
 EOF
