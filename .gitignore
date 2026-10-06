@@ -3,5 +3,8 @@
 evals/out/
 evals/*.log
 
+# Probe opt-in markers (hooks/*.mjs, `/yfx on`): local switches, never committed.
+.claude/*.on
+
 # Laid by Claude Code beside a mod at every load (this build's API types); regenerated, never edited.
 mods/*/.claude-plugin/types/

@@ -428,12 +428,19 @@ across agents as the primary reason. That reason is now subordinate. Why it is w
 **Not done:** `readiness.md` and `examples/AGENTS.md` are **frozen, not deleted** — kept as they
 are, not updated with new work. Revisit if a non-Claude user shows up.
 
-**Shipped first: `mods/yfx` 0.1.0** (installable via the root `.claude-plugin/marketplace.json`).
-`/yfx on|off nudge|lens|labels` with the state on the status line (`nudge`/`lens` are the same
-marker files the hooks read, written to the main checkout); with `labels` on, a band after each
-substantive turn asks the user *discovery / delivery* and, when a yfx skill fired, *useful /
-noise*; `/yfx export` writes `evals/out/live-{dataset,blind}.jsonl` for `score.mjs`. Unit-tested
-(`claude plugin test`); **not yet used in vivo** — the open risk is the band's own friction, the
+**Shipped first: `mods/yfx` 0.2.0** (installable via the root `.claude-plugin/marketplace.json`).
+`/yfx on|off nudge|lens|labels` with the effective state on the status line (`nudge`/`lens` are
+the marker files the hooks read; the mod re-implements the hooks' precedence — worktree or main
+marker, env first — because it cannot import them, so the two must change together); with
+`labels` on (per project), a band after each substantive turn asks the user *discovery /
+delivery* and, when a yfx skill fired, *useful / noise*. Labels live outside every repository
+(`~/.claude/yfx/labels/<project>.jsonl`); `/yfx export` copies them to
+`evals/out/live-{dataset,blind}.jsonl` only where that folder is gitignored, and `RUN=live` points
+`classify.mjs` / `score.mjs` at them (`prior_claim` is null there, so answer-key and echo read
+n/a). A `/code-review` pass on the first cut found ten defects — toggles that could disagree
+with the hooks, cross-project label leakage, an export the scorer could not read, a dropped
+verdict, stale prompts mislabelled — each now has a test. Unit-tested (`claude plugin test`,
+10); **not yet used in vivo** — the open risk is the band's own friction, the
 same over-ask failure the framework found in `/clarify`. Next candidate: the independent lens run
 by the mod itself (`$.agent`) at the commit boundary, shown to the user, not the executor.
 

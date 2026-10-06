@@ -9,21 +9,25 @@
 //   classifier vs prior   — the OLD self-referential score, shown for contrast
 //
 //   node score.mjs
+//   RUN=live node score.mjs   # the yfx mod's exported moves, scored against the user's labels
+//
+// A move with no prior_claim (every live move: the mod records no designer label) is left out of
+// the answer-key and echo numbers, which only mean something against a prior label.
 
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { readDataset, ROOT } from "./lib.mjs";
+import { readDataset, ROOT, outName } from "./lib.mjs";
 
 function load(name) {
   try {
     return Object.fromEntries(
-      readFileSync(join(ROOT, "out", name), "utf8").trim().split("\n").map((l) => {
+      readFileSync(join(ROOT, "out", outName(name)), "utf8").trim().split("\n").map((l) => {
         const o = JSON.parse(l);
         return [o.id, o];
       }),
     );
   } catch {
-    console.error(`missing out/${name} — run classify.mjs / label-blind.mjs first`);
+    console.error(`missing out/${outName(name)} — run classify.mjs / label-blind.mjs first`);
     process.exit(1);
   }
 }
@@ -37,33 +41,34 @@ const blind = load("blind.jsonl");
 const allIds = Object.keys(data).filter((id) => clf[id] && blind[id]);
 const errored = allIds.filter((id) => clf[id].label === "err" || clf[id].label === "?");
 const ids = allIds.filter((id) => !errored.includes(id));
-let cVsBlind = 0, priorVsBlind = 0, cVsPrior = 0, echo = 0;
+let cVsBlind = 0, priorVsBlind = 0, cVsPrior = 0, echo = 0, withPrior = 0;
 const rows = [];
 for (const id of ids) {
-  const truth = blind[id].label, pred = clf[id].label, prior = data[id].prior_claim;
+  const truth = blind[id].label, pred = clf[id].label, prior = data[id].prior_claim ?? null;
   const okTruth = pred === truth;
-  const priorOk = prior === truth;
-  const oldOk = pred === prior;
+  const priorOk = prior !== null && prior === truth;
+  const oldOk = prior !== null && pred === prior;
   if (okTruth) cVsBlind++;
+  if (prior !== null) withPrior++;
   if (priorOk) priorVsBlind++;
   if (oldOk) cVsPrior++;
   if (oldOk && !okTruth) echo++; // classifier matched my label but that label was wrong
   rows.push({ id, task: data[id].task, prior, truth, pred, src: blind[id].source, okTruth, priorOk });
 }
 
-const pct = (n) => `${n}/${ids.length} (${Math.round((100 * n) / ids.length)}%)`;
+const pct = (n, of = ids.length) => (of === 0 ? "n/a" : `${n}/${of} (${Math.round((100 * n) / of)}%)`);
 console.log(`\n=== L0 blind-label replay — ${ids.length} moves ===\n`);
 console.log("id   task   prior_claim  blind_truth  classifier   truth?  key-was-right?  source");
 for (const r of rows) {
   console.log(
-    `${r.id.padEnd(4)} ${r.task.padEnd(6)} ${r.prior.padEnd(12)} ${r.truth.padEnd(12)} ${r.pred.padEnd(12)} ` +
-    `${(r.okTruth ? "  ✓" : "  ✗").padEnd(7)} ${(r.priorOk ? "     ✓" : "     ✗").padEnd(15)} ${r.src}`,
+    `${r.id.padEnd(4)} ${r.task.padEnd(6)} ${(r.prior ?? "-").padEnd(12)} ${r.truth.padEnd(12)} ${r.pred.padEnd(12)} ` +
+    `${(r.okTruth ? "  ✓" : "  ✗").padEnd(7)} ${(r.prior === null ? "     -" : r.priorOk ? "     ✓" : "     ✗").padEnd(15)} ${r.src}`,
   );
 }
 console.log("\n--- headline numbers ---");
 console.log(`  classifier vs blind truth : ${pct(cVsBlind)}   <- the honest accuracy`);
-console.log(`  answer-key vs blind truth : ${pct(priorVsBlind)}   <- was my hand-label right?`);
-console.log(`  classifier vs answer-key  : ${pct(cVsPrior)}   <- the OLD self-referential score`);
+console.log(`  answer-key vs blind truth : ${pct(priorVsBlind, withPrior)}   <- was my hand-label right?`);
+console.log(`  classifier vs answer-key  : ${pct(cVsPrior, withPrior)}   <- the OLD self-referential score`);
 console.log(`  echo (matched my label, but my label was wrong): ${echo}`);
 if (errored.length) console.log(`  excluded (harness call failed/unparsed, not scored): ${errored.length} [${errored.join(", ")}]`);
 console.log(`\nRight direction = classifier↑ AND answer-key↑ converging. A high old score with a`);

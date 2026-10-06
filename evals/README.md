@@ -89,6 +89,19 @@ blind-truth score is the failure the framework warns about: measuring agreement,
 Replacing agent labels with user labels is what finally answers Open UU #4 (mode is the user's
 private intent, not a surface property).
 
+**Live moves.** The `mods/yfx` mod collects these labels in-session (`/yfx on labels`), on the
+user's real prompts, and `/yfx export` writes them as `out/live-dataset.jsonl` +
+`out/live-blind.jsonl`. `RUN=live` points every script at those names (and writes
+`out/live-classifier.jsonl`), so a live run never touches the shipped dataset's results:
+
+```bash
+RUN=live node classify.mjs mode && RUN=live node score.mjs
+```
+
+Live moves carry no `prior_claim`, so the answer-key and echo numbers read `n/a` for them; the
+headline is classifier vs the user. `label-blind.mjs` refuses to overwrite a file holding user
+labels.
+
 ## Extending the dataset
 
 The shipped moves are **genericized paraphrases** of the real private-project moves the framework

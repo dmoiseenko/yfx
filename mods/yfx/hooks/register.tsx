@@ -1,22 +1,29 @@
 // yfx in Claude Code. Two things the plain settings hooks cannot do:
 //
 // 1. Visible toggles. The probes stay off by default (CLAUDE.md); `/yfx on|off <probe>` flips
-//    them and the status line says what is on. `nudge` and `lens` are the SAME marker files the
-//    hooks in hooks/*.mjs read (.claude/recall-loop.on, .claude/fresh-lens.on, in the main
-//    checkout so worktrees inherit them), so the mod and the hooks never disagree.
+//    them and the status line says what is on. `nudge` and `lens` are the marker files the hooks
+//    in hooks/*.mjs read (.claude/recall-loop.on, .claude/fresh-lens.on), and the state shown is
+//    the hooks' own rule, re-implemented here because a mod cannot import a Node module: a marker
+//    in this checkout OR in the main one (worktrees live at <main>/.claude/worktrees/<name>),
+//    unless an environment variable decides first. Keep effective() in step with the hooks.
 // 2. The gold tier (evals/README.md, Open UU #4): after a substantive turn, a band above the
 //    prompt asks the user which mode their prompt was. Only the user knows their private intent;
-//    every other label in evals/ is the designer's or an agent's proxy. `/yfx export` writes the
-//    labelled moves to evals/out/ in the shape score.mjs and dataset.jsonl already use.
+//    every other label in evals/ is the designer's or an agent's proxy. Labels are kept per
+//    project, outside every repository; `/yfx export` copies this project's into evals/out/ for
+//    `RUN=live node evals/score.mjs`, and only where that folder is gitignored.
 //
 // It does not classify, nudge or audit by itself — that is still the hooks and skills.
 
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
-import type { YfxLabel, YfxMode, YfxPending, YfxToggles } from '../types'
+import type { YfxLabel, YfxMode, YfxPending, YfxProbeState, YfxToggles, YfxVerdict } from '../types'
 
-const OFF: YfxToggles = { nudge: false, lens: false, labels: false }
+const OFF: YfxToggles = {
+  nudge: { on: false, by: 'marker' },
+  lens: { on: false, by: 'marker' },
+  labels: false,
+}
 const toggles = atom({ plugin: 'yfx', key: 'toggles' } as const, OFF)
 const pending = atom({ plugin: 'yfx', key: 'pending' } as const, null)
 const skillsThisTurn = atom({ plugin: 'yfx', key: 'skillsThisTurn' } as const, [])
@@ -25,50 +32,61 @@ const YFX_SKILLS = new Set(['recall', 'clarify', 'fresh-lens', '2nd'])
 const MARKERS = { nudge: 'recall-loop.on', lens: 'fresh-lens.on' } as const
 const PROBES = ['nudge', 'lens', 'labels'] as const
 type Probe = (typeof PROBES)[number]
+type HookProbe = 'nudge' | 'lens'
 const CLIP = 2000
+// $.fs reads and writes at most 4 MiB; stop short of it rather than fail inside a key press.
+const LABELS_MAX_BYTES = 3.5 * 1024 * 1024
 
 // Same bar as hooks/recall-context.mjs: a trivial reply is not a move worth labelling.
 const isSubstantive = (text: string) =>
   text.trim().length >= 20 && /[A-Za-zА-Яа-яЁё]/.test(text)
 
-// The main checkout: a worktree lives at <main>/.claude/worktrees/<name>.
-const mainRoot = async ($: EngineInterface) => {
-  const root = await $.session.root()
-  const at = root.indexOf('/.claude/worktrees/')
-  return at === -1 ? root : root.slice(0, at)
+const roots = async ($: EngineInterface) => {
+  const here = await $.session.root()
+  const at = here.indexOf('/.claude/worktrees/')
+  return { here, main: at === -1 ? here : here.slice(0, at) }
 }
 
-const markerPath = async ($: EngineInterface, probe: 'nudge' | 'lens') =>
-  `${await mainRoot($)}/.claude/${MARKERS[probe]}`
+const markerPaths = async ($: EngineInterface, probe: HookProbe) => {
+  const { here, main } = await roots($)
+  return [...new Set([here, main])].map(root => `${root}/.claude/${MARKERS[probe]}`)
+}
 
-const exists = async ($: EngineInterface, path: string) => {
-  try {
-    await $.fs.stat(path)
-    return true
-  } catch {
-    return false
+// What the hook will do, by the hook's own precedence.
+const effective = async ($: EngineInterface, probe: HookProbe): Promise<YfxProbeState> => {
+  if (probe === 'nudge') {
+    // recall-context.mjs: an explicit falsy RECALL_LOOP forces off, a truthy one forces on.
+    const value = (await $.env.get('RECALL_LOOP')) ?? ''
+    if (/^(0|false|off|no)$/i.test(value)) return { on: false, by: 'env' }
+    if (/^(1|true|on|yes)$/i.test(value)) return { on: true, by: 'env' }
+  } else if ((await $.env.get('FRESH_LENS_TRIGGER')) === '1') {
+    // fresh-lens-trigger.mjs: only "1" turns it on; nothing turns it off.
+    return { on: true, by: 'env' }
   }
+  for (const path of await markerPaths($, probe)) {
+    if (await $.fs.exists(path)) return { on: true, by: 'marker' }
+  }
+  return { on: false, by: 'marker' }
 }
+
+// Per project: turning labels on in one repository must not start asking in every other.
+const labelsOnKey = async ($: EngineInterface) => `labels-on:${(await roots($)).main}`
 
 const loadToggles = async ($: EngineInterface): Promise<YfxToggles> => ({
-  nudge: await exists($, await markerPath($, 'nudge')),
-  lens: await exists($, await markerPath($, 'lens')),
-  labels: (await $.store.get('labels-on')) === true,
+  nudge: await effective($, 'nudge'),
+  lens: await effective($, 'lens'),
+  labels: (await $.store.get(await labelsOnKey($))) === true,
 })
 
 const showStatus = ($: EngineInterface, t: YfxToggles) => {
   const dot = (on: boolean) => (on ? '●' : '○')
-  $.ui.status(`yfx nudge${dot(t.nudge)} lens${dot(t.lens)} labels${dot(t.labels)}`)
+  const probe = (name: string, s: YfxProbeState) => `${name}${dot(s.on)}${s.by === 'env' ? '(env)' : ''}`
+  $.ui.status(`yfx ${probe('nudge', t.nudge)} ${probe('lens', t.lens)} labels${dot(t.labels)}`)
 }
 
-const setProbe = async ($: EngineInterface, probe: Probe, on: boolean) => {
-  if (probe === 'labels') {
-    await $.store.set('labels-on', on)
-  } else {
-    const path = await markerPath($, probe)
-    if (on) await $.fs.write(path, '')
-    else await $.process.run(['rm', '-f', path])
-  }
+const describe = (t: YfxToggles) => {
+  const probe = (s: YfxProbeState) => `${s.on ? 'on' : 'off'}${s.by === 'env' ? ' (set by env)' : ''}`
+  return `nudge ${probe(t.nudge)}, lens ${probe(t.lens)}, labels ${t.labels ? 'on' : 'off'}`
 }
 
 const refresh = async ($: EngineInterface) => {
@@ -78,33 +96,82 @@ const refresh = async ($: EngineInterface) => {
   return t
 }
 
-const storedLabels = async ($: EngineInterface) =>
-  ((await $.store.get('labels')) as YfxLabel[] | undefined) ?? []
+// A marker is a local opt-in: keep it out of commits, or one `git add -A` turns the probe on for
+// every clone. Where the repository does not ignore it, ignore it locally (.git/info/exclude).
+const keepUncommitted = async ($: EngineInterface, root: string, probe: HookProbe) => {
+  const rel = `.claude/${MARKERS[probe]}`
+  const ignored = await $.process.run(['git', '-C', root, 'check-ignore', '-q', rel])
+  if (ignored.exitCode !== 1) return // 0: ignored already; 128: not a git checkout
+  const exclude = `${root}/.git/info/exclude`
+  if (!(await $.fs.exists(`${root}/.git`))) return
+  const text = (await $.fs.exists(exclude)) ? await $.fs.read(exclude) : ''
+  await $.fs.write(exclude, `${text}${text === '' || text.endsWith('\n') ? '' : '\n'}${rel}\n`)
+}
+
+const setProbe = async ($: EngineInterface, probe: Probe, on: boolean) => {
+  if (probe === 'labels') {
+    await $.store.set(await labelsOnKey($), on)
+    return
+  }
+  if (on) {
+    // The main checkout's marker: one switch for the repository, its worktrees included.
+    const { main } = await roots($)
+    await $.fs.write(`${main}/.claude/${MARKERS[probe]}`, '')
+    await keepUncommitted($, main, probe)
+  } else {
+    // Off means off wherever the hook would look.
+    await $.process.run(['rm', '-f', ...(await markerPaths($, probe))])
+  }
+}
+
+// Labels live in one JSONL file per project under the user's Claude directory: never inside a
+// repository (they hold prompts), never in $.store (one 4 MiB file shared by every project).
+const labelsFile = async ($: EngineInterface) => {
+  const home = (await $.env.get('CLAUDE_CONFIG_DIR')) ?? `${await $.env.get('HOME')}/.claude`
+  const slug = (await roots($)).main.replace(/[^A-Za-z0-9._-]+/g, '-')
+  return `${home}/yfx/labels/${slug}.jsonl`
+}
+
+const storedLabels = async ($: EngineInterface, path: string): Promise<YfxLabel[]> => {
+  if (!(await $.fs.exists(path))) return []
+  const text = await $.fs.read(path)
+  return text
+    .split('\n')
+    .filter(line => line.trim() !== '')
+    .map(line => JSON.parse(line) as YfxLabel)
+}
 
 const saveLabel = async ($: EngineInterface, move: YfxPending, label: YfxMode, why: string) => {
-  const entry: YfxLabel = {
-    id: move.id,
-    label,
-    why,
-    source: 'user',
-    prompt: move.prompt,
-    answer: move.answer,
-    skills: move.skills,
-    skillVerdict: move.skillVerdict,
-    at: move.at,
+  const path = await labelsFile($)
+  const labels = (await storedLabels($, path)).filter(one => one.id !== move.id)
+  const entry: YfxLabel = { ...move, label, why, source: 'user' }
+  const text = [...labels, entry].map(one => JSON.stringify(one)).join('\n') + '\n'
+  if (text.length > LABELS_MAX_BYTES) {
+    $.ui.toast(`yfx: ${path} is full; export and move it aside to keep labelling.`)
+    return labels.length
   }
-  const labels = await storedLabels($)
-  await $.store.set('labels', [...labels.filter(one => one.id !== move.id), entry])
+  await $.fs.write(path, text)
   await update($, pending, () => null)
   return labels.length + 1
 }
 
 const exportLabels = async ($: EngineInterface) => {
-  const labels = await storedLabels($)
-  if (labels.length === 0) return 'yfx: no labels to export yet.'
-  const out = `${await mainRoot($)}/evals/out`
+  const path = await labelsFile($)
+  const labels = await storedLabels($, path)
+  if (labels.length === 0) return 'yfx: no labels for this project yet.'
+  const { main } = await roots($)
+  const out = 'evals/out'
+  const ignored = await $.process.run([
+    'git', '-C', main, 'check-ignore', '-q', `${out}/live-dataset.jsonl`,
+  ])
+  if (ignored.exitCode !== 0) {
+    return (
+      `yfx: not exporting — ${out}/ is not gitignored here, and the labels hold your prompts. ` +
+      `They stay in ${path}.`
+    )
+  }
   // dataset.jsonl's move shape (resolution: the answer, for the hindsight labeller) and
-  // score.mjs's label shape, so the existing harness reads both unchanged.
+  // score.mjs's label shape; `RUN=live` points the harness at these names.
   const moves = labels.map(one => ({
     id: one.id,
     task: 'mode',
@@ -112,15 +179,18 @@ const exportLabels = async ($: EngineInterface) => {
     context: one.skills.length > 0 ? `live; yfx skills fired: ${one.skills.join(', ')}` : 'live',
     resolution: one.answer,
     prior_claim: null,
+    skills: one.skills,
+    skill_verdict: one.skillVerdict ?? null,
   }))
   const blind = labels.map(one => ({ id: one.id, label: one.label, why: one.why, source: 'user' }))
   const jsonl = (rows: unknown[]) => rows.map(row => JSON.stringify(row)).join('\n') + '\n'
-  await $.fs.write(`${out}/live-dataset.jsonl`, jsonl(moves))
-  await $.fs.write(`${out}/live-blind.jsonl`, jsonl(blind))
+  await $.fs.write(`${main}/${out}/live-dataset.jsonl`, jsonl(moves))
+  await $.fs.write(`${main}/${out}/live-blind.jsonl`, jsonl(blind))
   const verdicts = labels.filter(one => one.skillVerdict !== undefined).length
   return (
     `yfx: exported ${labels.length} labelled moves (${verdicts} with a skill verdict) to ` +
-    `evals/out/live-dataset.jsonl and evals/out/live-blind.jsonl (gitignored: they hold your prompts).`
+    `${out}/live-dataset.jsonl and live-blind.jsonl. Score: RUN=live node evals/classify.mjs mode ` +
+    `&& RUN=live node evals/score.mjs`
   )
 }
 
@@ -146,10 +216,12 @@ export const register: Register = on => {
     return { text: await runCommand($, verb, arg, rest.join(' ')) }
   })
 
-  // Which yfx skills the model expanded this turn — tells the user what they are judging.
+  // Which yfx skills the model expanded this turn — tells the user what they are judging. Only
+  // the bare names install.sh links, or the yfx plugin's own; another plugin's `x:recall` is not
+  // ours. The event carries no agent id, so a yfx skill a subagent loads still counts.
   on('skill.prompt', async ($, e, next) => {
-    const name = e.skill.split(':').pop() ?? e.skill
-    if (YFX_SKILLS.has(name)) {
+    const [owner, name] = e.skill.includes(':') ? e.skill.split(':', 2) : ['yfx', e.skill]
+    if (owner === 'yfx' && name !== undefined && YFX_SKILLS.has(name)) {
       await update($, skillsThisTurn, list => (list.includes(name) ? list : [...list, name]))
     }
     return next(e)
@@ -167,18 +239,21 @@ export const register: Register = on => {
   }).catch(($, e, next) => next(e)) // a labelling bug must never block the user's prompt
 
   on('turn.complete', async ($, e, next) => {
-    const t = await read($, toggles)
-    if (e.agentId === undefined && e.reason === 'answer' && t.labels && prompt !== null) {
+    if (e.agentId !== undefined) return next(e)
+    // Every main-loop turn consumes the prompt, labelled or not: one left over from an
+    // interrupted turn must not pair with the answer of a later notification's turn.
+    const asked = prompt
+    prompt = null
+    if (e.reason === 'answer' && asked !== null && (await read($, toggles)).labels) {
       const at = await $.clock.now()
       const move: YfxPending = {
         id: `L-${at.toString(36)}`,
-        prompt: prompt.slice(0, CLIP),
+        prompt: asked.slice(0, CLIP),
         answer: e.answer.slice(0, CLIP),
         skills: await read($, skillsThisTurn),
         at,
       }
       await update($, pending, () => move)
-      prompt = null
     }
     return next(e)
   })
@@ -189,7 +264,7 @@ export const register: Register = on => {
 
     const { Box, Button, Text } = $.ui.resolve(e)
     const label = (mode: YfxMode) => () => saveLabel($, move, mode, '')
-    const verdict = (skillVerdict: 'useful' | 'noise') => () =>
+    const verdict = (skillVerdict: YfxVerdict) => () =>
       update($, pending, cur => (cur === null ? cur : { ...cur, skillVerdict }))
 
     return (
@@ -218,10 +293,8 @@ export const register: Register = on => {
 async function runCommand($: EngineInterface, verb: string, arg: string, why: string) {
   if (verb === '' || verb === 'status') {
     const t = await refresh($)
-    const count = (await storedLabels($)).length
-    return `yfx: nudge ${t.nudge ? 'on' : 'off'}, lens ${t.lens ? 'on' : 'off'}, labels ${
-      t.labels ? 'on' : 'off'
-    } · ${count} labelled moves stored.\n${HELP}`
+    const count = (await storedLabels($, await labelsFile($))).length
+    return `yfx: ${describe(t)} · ${count} labelled moves for this project.\n${HELP}`
   }
   if (verb === 'on' || verb === 'off') {
     const which: readonly Probe[] =
@@ -229,20 +302,21 @@ async function runCommand($: EngineInterface, verb: string, arg: string, why: st
     if (which.length === 0) return HELP
     for (const probe of which) await setProbe($, probe, verb === 'on')
     const t = await refresh($)
-    const envNote =
-      (await $.env.get('RECALL_LOOP')) !== undefined || (await $.env.get('FRESH_LENS_TRIGGER')) !== undefined
-        ? ' Note: RECALL_LOOP / FRESH_LENS_TRIGGER is set in the environment and overrides the markers for the hooks.'
+    const stuck = which.filter(
+      (probe): probe is HookProbe => probe !== 'labels' && t[probe].by === 'env' && t[probe].on !== (verb === 'on'),
+    )
+    const note =
+      stuck.length > 0
+        ? ` ${stuck.join(', ')} stays ${verb === 'on' ? 'off' : 'on'}: an environment variable decides it for the hook.`
         : ''
-    return `yfx: ${which.join(', ')} ${verb}. nudge ${t.nudge ? 'on' : 'off'}, lens ${
-      t.lens ? 'on' : 'off'
-    }, labels ${t.labels ? 'on' : 'off'}.${envNote}`
+    return `yfx: ${describe(t)}.${note}`
   }
   if (verb === 'label') {
     if (arg !== 'discovery' && arg !== 'delivery') return HELP
     const move = await read($, pending)
     if (move === null) return 'yfx: no unlabelled move (labels must be on before the turn).'
     const count = await saveLabel($, move, arg, why)
-    return `yfx: labelled ${move.id} as ${arg}. ${count} stored.`
+    return `yfx: labelled ${move.id} as ${arg}. ${count} stored for this project.`
   }
   if (verb === 'export') return exportLabels($)
   return HELP

@@ -139,11 +139,13 @@ settings hooks can't reach: it draws, asks, and keeps state. Install it from a t
 /plugin install yfx --marketplace dmoiseenko/yfx
 ```
 
-Everything in it is off until you turn it on: `/yfx on labels` starts asking, after each
-substantive turn, whether your prompt was *discovery* or *delivery* (and whether a yfx skill that
-fired was useful). Those are the user-supplied labels `evals/README.md` calls the gold tier;
-`/yfx export` writes them to `evals/out/` in the shape `score.mjs` reads. `/yfx on nudge|lens`
-flips the same marker files the hooks below read, and the status line shows what is on.
+Everything in it is off until you turn it on, per project: `/yfx on labels` starts asking,
+after each substantive turn, whether your prompt was *discovery* or *delivery* (and whether a yfx
+skill that fired was useful). Those are the user-supplied labels `evals/README.md` calls the gold
+tier. They are kept outside the repository (`~/.claude/yfx/labels/`, one file per project);
+`/yfx export` copies them into `evals/out/` only where that folder is gitignored, for
+`RUN=live node evals/score.mjs`. `/yfx on nudge|lens` flips the marker files the hooks below
+read; the status line shows what the hooks will actually do, `(env)` when a variable decides.
 
 **Hooks are off by default.** `install.sh` links them in but they stay dormant until you wire them
 in `~/.claude/settings.json` and set each one's opt-in flag (`FRESH_LENS_TRIGGER=1`, or a
