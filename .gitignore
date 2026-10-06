@@ -2,3 +2,6 @@
 # evals/RESULTS-2nd.md and the design record under docs/.
 evals/out/
 evals/*.log
+
+# Laid by Claude Code beside a mod at every load (this build's API types); regenerated, never edited.
+mods/*/.claude-plugin/types/

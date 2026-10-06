@@ -407,6 +407,36 @@ arm differs in one respect when it differs in two**.
   problem is robust to both leaks; how its findings get *classified* is not.
 - The mode classifier and readiness evals also ran under the leak and are not re-checked at all.
 
+## Update 2026-10-06 — Claude Code only, built on mods (reverses the 2026-07-31 portability call)
+
+**Decision (user's):** for now, build for Claude Code only, and use Claude Code *mods* (in-process
+hook plugins: panes, bands, status line, slash commands, `tool.call` / `prompt.compose` hooks,
+`$.agent` / `$.model`, `$.store`) to the fullest.
+
+**What it contradicts, said out loud:** on 2026-07-31 the x/y probe was pulled out of Claude
+packaging into a tool-agnostic core (`readiness.md`, `examples/AGENTS.md`), with portability
+across agents as the primary reason. That reason is now subordinate. Why it is worth paying:
+
+- The non-redundant value is the **independent lens**, and its open gap is that invocation still
+  rests on the executor (the PreToolUse hook only *reminds*). A mod can run the cold agent itself
+  and show the result to the user — the referee — bypassing the executor. Plain hooks can't.
+- The gold tier (user-supplied labels, the only answer to caveat #4) has no capture path. A mod
+  can ask for a label in-session and store it, turning every working session into eval data.
+- Portability was never measured as wanted by anyone; the x/y self-probe it carried is largely
+  internalized in a strong model anyway (fair A/B, +22 pts on n=6).
+
+**Not done:** `readiness.md` and `examples/AGENTS.md` are **frozen, not deleted** — kept as they
+are, not updated with new work. Revisit if a non-Claude user shows up.
+
+**Shipped first: `mods/yfx` 0.1.0** (installable via the root `.claude-plugin/marketplace.json`).
+`/yfx on|off nudge|lens|labels` with the state on the status line (`nudge`/`lens` are the same
+marker files the hooks read, written to the main checkout); with `labels` on, a band after each
+substantive turn asks the user *discovery / delivery* and, when a yfx skill fired, *useful /
+noise*; `/yfx export` writes `evals/out/live-{dataset,blind}.jsonl` for `score.mjs`. Unit-tested
+(`claude plugin test`); **not yet used in vivo** — the open risk is the band's own friction, the
+same over-ask failure the framework found in `/clarify`. Next candidate: the independent lens run
+by the mod itself (`$.agent`) at the commit boundary, shown to the user, not the executor.
+
 ## What shipped (done)
 
 - `/fresh-lens` skill (detect + audit), mandates embedded.

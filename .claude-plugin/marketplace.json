@@ -1,0 +1,13 @@
+{
+  "name": "yfx",
+  "owner": {
+    "name": "Denis Moiseenko"
+  },
+  "description": "y=f(x) collaboration framework as Claude Code mods",
+  "plugins": [
+    {
+      "name": "yfx",
+      "source": "./mods/yfx"
+    }
+  ]
+}
