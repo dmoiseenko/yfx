@@ -19,8 +19,15 @@ export const MODEL = process.env.MODEL || "sonnet";
 // and the run stalls without erroring.
 const CALL_TIMEOUT = Number(process.env.CALL_TIMEOUT || 90000);
 
+// RUN names an alternate replay: RUN=live reads out/live-dataset.jsonl (the moves the yfx mod
+// exports, labelled by the user in-session) and keeps every output under its own out/live-*
+// name, so a live run never overwrites the shipped dataset's results.
+export const RUN = process.env.RUN || "";
+export const outName = (name) => (RUN ? `${RUN}-${name}` : name);
+
 export function readDataset(taskFilter) {
-  const raw = readFileSync(join(ROOT, "dataset.jsonl"), "utf8").trim().split("\n");
+  const path = RUN ? join(ROOT, "out", outName("dataset.jsonl")) : join(ROOT, "dataset.jsonl");
+  const raw = readFileSync(path, "utf8").trim().split("\n");
   const rows = raw.map((l) => JSON.parse(l));
   return taskFilter ? rows.filter((r) => r.task === taskFilter) : rows;
 }

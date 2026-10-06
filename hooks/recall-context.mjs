@@ -39,6 +39,7 @@
 //     enables the loop in every worktree (the file is gitignored, so fresh worktrees lack their
 //     own) — see markerEnabled.
 // Unset both and the hook exits immediately with zero overhead, so it can ship on main dormant.
+// mods/yfx re-implements this precedence (effective()) to show the state — change both together.
 
 import { existsSync } from "node:fs";
 import { join } from "node:path";

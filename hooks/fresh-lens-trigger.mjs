@@ -20,6 +20,7 @@
 //     mid-session from the next matching tool call (no restart). A marker in the MAIN
 //     checkout also enables it in every worktree (the file is gitignored).
 // Unset both and the hook exits immediately with zero overhead.
+// mods/yfx re-implements this precedence (effective()) to show the state — change both together.
 
 import { readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";

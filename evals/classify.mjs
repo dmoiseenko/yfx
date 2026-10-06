@@ -5,10 +5,11 @@
 //
 //   node classify.mjs            # all rows -> out/classifier.jsonl
 //   MODEL=haiku node classify.mjs
+//   RUN=live node classify.mjs   # the mod's exported moves -> out/live-classifier.jsonl
 
 import { writeFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
-import { readDataset, claude, firstJson, labelFallback, shippedModeMandate, ROUTE_METHOD, ROOT, MODEL } from "./lib.mjs";
+import { readDataset, claude, firstJson, labelFallback, shippedModeMandate, ROUTE_METHOD, ROOT, MODEL, outName } from "./lib.mjs";
 
 const MANDATE = shippedModeMandate();
 
@@ -40,5 +41,5 @@ for (const r of rows) {
   console.error(`  ${res.id.padEnd(3)} -> ${res.label}`);
 }
 mkdirSync(join(ROOT, "out"), { recursive: true });
-writeFileSync(join(ROOT, "out", "classifier.jsonl"), results.map((r) => JSON.stringify(r)).join("\n") + "\n");
-console.error(`wrote out/classifier.jsonl (${results.length} rows)`);
+writeFileSync(join(ROOT, "out", outName("classifier.jsonl")), results.map((r) => JSON.stringify(r)).join("\n") + "\n");
+console.error(`wrote out/${outName("classifier.jsonl")} (${results.length} rows)`);

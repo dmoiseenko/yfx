@@ -11,9 +11,9 @@
 //   node label-blind.mjs         # all rows -> out/blind.jsonl
 //   MODEL=haiku node label-blind.mjs
 
-import { writeFileSync, mkdirSync } from "node:fs";
+import { writeFileSync, mkdirSync, existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { readDataset, claude, firstJson, ROOT, MODEL } from "./lib.mjs";
+import { readDataset, claude, firstJson, ROOT, MODEL, outName } from "./lib.mjs";
 
 // Definitions only — deliberately NOT the classifier's signals/critical-rule/bias-guard.
 // The labeler judges from what the outcome revealed, not from the wording.
@@ -43,6 +43,13 @@ async function labelRoute(r) {
   return { id: r.id, task: "route", label: (j.label || "?").toLowerCase(), why: j.why || out.slice(0, 60), source: r.resolution ? "agent-hindsight" : "agent-foresight" };
 }
 
+const target = join(ROOT, "out", outName("blind.jsonl"));
+// Never replace the gold tier with the proxy: user labels (the yfx mod's export) are the truth
+// this script only stands in for.
+if (existsSync(target) && /"source":"user"/.test(readFileSync(target, "utf8"))) {
+  console.error(`out/${outName("blind.jsonl")} holds user labels — not overwriting them with agent labels.`);
+  process.exit(1);
+}
 const only = process.argv[2];
 const rows = readDataset(only);
 console.error(`blind-labeling ${rows.length} moves INDEPENDENTLY (model=${MODEL})…`);
@@ -53,5 +60,5 @@ for (const r of rows) {
   console.error(`  ${res.id.padEnd(3)} -> ${res.label}  [${res.source}]`);
 }
 mkdirSync(join(ROOT, "out"), { recursive: true });
-writeFileSync(join(ROOT, "out", "blind.jsonl"), results.map((r) => JSON.stringify(r)).join("\n") + "\n");
-console.error(`wrote out/blind.jsonl (${results.length} rows)`);
+writeFileSync(target, results.map((r) => JSON.stringify(r)).join("\n") + "\n");
+console.error(`wrote out/${outName("blind.jsonl")} (${results.length} rows)`);
