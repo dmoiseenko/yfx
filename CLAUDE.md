@@ -47,6 +47,10 @@ so it travels.
   Naming a provider in *rationale* is fine and sometimes required — `skills/recall/SKILL.md` says
   which provider each retrieval measurement was taken on, because a number without its provider
   is the very overreach this layer exists to stop.
+- **One `/code-review` per PR.** Run it once, fix its findings in the same PR, and don't run another
+  pass on the fixes — each round of a high-effort review finds a fresh batch (PR #18: 10, then 10
+  more), so repeated rounds don't converge. Say in the PR which findings were fixed, which were
+  checked and rejected, and which are left as known limits.
 - `npm test` runs the hook unit tests and the card claim-vs-measurement checks. Run it before
   committing a change to a card or a hook. For the mod: `claude plugin validate mods/yfx` and
   `claude plugin test mods/yfx` before committing a change to it.

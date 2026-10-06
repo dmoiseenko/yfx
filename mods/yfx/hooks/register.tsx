@@ -41,15 +41,25 @@ const LABELS_MAX_BYTES = 3.5 * 1024 * 1024
 const isSubstantive = (text: string) =>
   text.trim().length >= 20 && /[A-Za-zА-Яа-яЁё]/.test(text)
 
+// The main checkout behind a worktree (<main>/.claude/worktrees/<name>), by each hook's own rule:
+// recall-context.mjs cuts at the first `/.claude/worktrees/` anywhere in the path, while
+// fresh-lens-trigger.mjs only matches a path that ends at the worktree's root.
+const MAIN_OF: Record<HookProbe, (dir: string) => string> = {
+  nudge: dir => {
+    const at = dir.indexOf('/.claude/worktrees/')
+    return at === -1 ? dir : dir.slice(0, at)
+  },
+  lens: dir => dir.match(/^(.*)\/\.claude\/worktrees\/[^/]+$/)?.[1] ?? dir,
+}
+
 const roots = async ($: EngineInterface) => {
   const here = await $.session.root()
-  const at = here.indexOf('/.claude/worktrees/')
-  return { here, main: at === -1 ? here : here.slice(0, at) }
+  return { here, main: MAIN_OF.nudge(here) }
 }
 
 const markerPaths = async ($: EngineInterface, probe: HookProbe) => {
-  const { here, main } = await roots($)
-  return [...new Set([here, main])].map(root => `${root}/.claude/${MARKERS[probe]}`)
+  const here = await $.session.root()
+  return [...new Set([here, MAIN_OF[probe](here)])].map(root => `${root}/.claude/${MARKERS[probe]}`)
 }
 
 // What the hook will do, by the hook's own precedence.
@@ -98,61 +108,92 @@ const refresh = async ($: EngineInterface) => {
 
 // A marker is a local opt-in: keep it out of commits, or one `git add -A` turns the probe on for
 // every clone. Where the repository does not ignore it, ignore it locally (.git/info/exclude).
+// Returns a warning when the marker could not be kept out of commits.
 const keepUncommitted = async ($: EngineInterface, root: string, probe: HookProbe) => {
   const rel = `.claude/${MARKERS[probe]}`
   const ignored = await $.process.run(['git', '-C', root, 'check-ignore', '-q', rel])
-  if (ignored.exitCode !== 1) return // 0: ignored already; 128: not a git checkout
-  const exclude = `${root}/.git/info/exclude`
-  if (!(await $.fs.exists(`${root}/.git`))) return
-  const text = (await $.fs.exists(exclude)) ? await $.fs.read(exclude) : ''
-  await $.fs.write(exclude, `${text}${text === '' || text.endsWith('\n') ? '' : '\n'}${rel}\n`)
+  if (ignored.exitCode !== 1) return '' // 0: ignored already; 128: not a git checkout
+  // Ask git where the file is: `.git` is a file in a submodule or a linked worktree.
+  const where = await $.process.run(['git', '-C', root, 'rev-parse', '--git-path', 'info/exclude'])
+  const found = where.stdout.trim()
+  if (where.exitCode !== 0 || found === '') return ` ${rel} is not gitignored here — do not commit it.`
+  const exclude = found.startsWith('/') ? found : `${root}/${found}`
+  try {
+    const text = (await $.fs.exists(exclude)) ? await $.fs.read(exclude) : ''
+    await $.fs.write(exclude, `${text}${text === '' || text.endsWith('\n') ? '' : '\n'}${rel}\n`)
+    return ''
+  } catch {
+    return ` ${rel} is not gitignored here and ${exclude} could not be written — do not commit it.`
+  }
 }
 
+// Returns a warning for the user, or ''.
 const setProbe = async ($: EngineInterface, probe: Probe, on: boolean) => {
   if (probe === 'labels') {
     await $.store.set(await labelsOnKey($), on)
-    return
+    return ''
   }
   if (on) {
     // The main checkout's marker: one switch for the repository, its worktrees included.
-    const { main } = await roots($)
+    const main = MAIN_OF[probe](await $.session.root())
     await $.fs.write(`${main}/.claude/${MARKERS[probe]}`, '')
-    await keepUncommitted($, main, probe)
-  } else {
-    // Off means off wherever the hook would look.
-    await $.process.run(['rm', '-f', ...(await markerPaths($, probe))])
+    return keepUncommitted($, main, probe)
   }
+  // Off means off wherever the hook would look.
+  await $.process.run(['rm', '-f', ...(await markerPaths($, probe))])
+  return ''
 }
 
 // Labels live in one JSONL file per project under the user's Claude directory: never inside a
 // repository (they hold prompts), never in $.store (one 4 MiB file shared by every project).
 const labelsFile = async ($: EngineInterface) => {
   const home = (await $.env.get('CLAUDE_CONFIG_DIR')) ?? `${await $.env.get('HOME')}/.claude`
-  const slug = (await roots($)).main.replace(/[^A-Za-z0-9._-]+/g, '-')
-  return `${home}/yfx/labels/${slug}.jsonl`
+  const { main } = await roots($)
+  // A readable name plus a hash of the whole path: `/a-b/c` and `/a/b-c` must not share a file.
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(main))
+  const hash = [...new Uint8Array(digest).slice(0, 6)].map(b => b.toString(16).padStart(2, '0')).join('')
+  const name = main.split('/').filter(Boolean).pop()?.replace(/[^A-Za-z0-9._-]+/g, '-') ?? 'root'
+  return `${home}/yfx/labels/${name}-${hash}.jsonl`
 }
 
 const storedLabels = async ($: EngineInterface, path: string): Promise<YfxLabel[]> => {
   if (!(await $.fs.exists(path))) return []
   const text = await $.fs.read(path)
-  return text
-    .split('\n')
-    .filter(line => line.trim() !== '')
-    .map(line => JSON.parse(line) as YfxLabel)
+  const labels: YfxLabel[] = []
+  let bad = 0
+  for (const line of text.split('\n')) {
+    if (line.trim() === '') continue
+    try {
+      labels.push(JSON.parse(line) as YfxLabel)
+    } catch {
+      bad += 1 // a torn or hand-edited line costs itself, not every label before it
+    }
+  }
+  if (bad > 0) $.ui.toast(`yfx: skipped ${bad} unreadable line(s) in ${path}`)
+  return labels
 }
 
-const saveLabel = async ($: EngineInterface, move: YfxPending, label: YfxMode, why: string) => {
+// Labels the move pending NOW (with its verdict as it stands), never a copy a drawing captured;
+// `expectedId` is the move the user was looking at, and a press on a move that is no longer
+// pending does nothing.
+const saveLabel = async ($: EngineInterface, label: YfxMode, why: string, expectedId?: string) => {
+  const move = await read($, pending)
+  if (move === null || (expectedId !== undefined && move.id !== expectedId)) {
+    return { saved: false as const, reason: 'no unlabelled move (labels must be on before the turn).' }
+  }
   const path = await labelsFile($)
   const labels = (await storedLabels($, path)).filter(one => one.id !== move.id)
   const entry: YfxLabel = { ...move, label, why, source: 'user' }
   const text = [...labels, entry].map(one => JSON.stringify(one)).join('\n') + '\n'
-  if (text.length > LABELS_MAX_BYTES) {
-    $.ui.toast(`yfx: ${path} is full; export and move it aside to keep labelling.`)
-    return labels.length
+  // The limit is in bytes; Cyrillic is two bytes a character in UTF-8.
+  if (new TextEncoder().encode(text).length > LABELS_MAX_BYTES) {
+    const reason = `${path} is full; export and move it aside to keep labelling.`
+    $.ui.toast(`yfx: ${reason}`)
+    return { saved: false as const, reason }
   }
   await $.fs.write(path, text)
-  await update($, pending, () => null)
-  return labels.length + 1
+  await update($, pending, cur => (cur?.id === move.id ? null : cur))
+  return { saved: true as const, id: move.id, count: labels.length + 1 }
 }
 
 const exportLabels = async ($: EngineInterface) => {
@@ -176,7 +217,10 @@ const exportLabels = async ($: EngineInterface) => {
     id: one.id,
     task: 'mode',
     prompt: one.prompt,
-    context: one.skills.length > 0 ? `live; yfx skills fired: ${one.skills.join(', ')}` : 'live',
+    // Foresight only: classify.mjs shows `context` to the classifier, and which skills fired is
+    // hindsight (the agent's own reading of the move). It rides in `skills`, which no
+    // classifier reads.
+    context: 'live',
     resolution: one.answer,
     prior_claim: null,
     skills: one.skills,
@@ -234,6 +278,9 @@ export const register: Register = on => {
     if (isUsers && e.turnId === undefined) {
       prompt = isSubstantive(e.text) ? e.text : null
       await update($, skillsThisTurn, () => [])
+      // A new prompt ends the chance to label the last one: a band still asking "your last
+      // prompt was" during the next turn would get the new prompt's answer.
+      await update($, pending, () => null)
     }
     return next(e)
   }).catch(($, e, next) => next(e)) // a labelling bug must never block the user's prompt
@@ -260,12 +307,13 @@ export const register: Register = on => {
 
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
     const move = await read($, pending)
-    if (e.props.hasSurvey || move === null || !(await read($, toggles)).labels) return next(e)
+    const isQuiet = e.props.hasSurvey || e.props.isWorking
+    if (isQuiet || move === null || !(await read($, toggles)).labels) return next(e)
 
     const { Box, Button, Text } = $.ui.resolve(e)
-    const label = (mode: YfxMode) => () => saveLabel($, move, mode, '')
+    const label = (mode: YfxMode) => () => saveLabel($, mode, '', move.id)
     const verdict = (skillVerdict: YfxVerdict) => () =>
-      update($, pending, cur => (cur === null ? cur : { ...cur, skillVerdict }))
+      update($, pending, cur => (cur?.id === move.id ? { ...cur, skillVerdict } : cur))
 
     return (
       <Box flexDirection="column">
@@ -300,7 +348,8 @@ async function runCommand($: EngineInterface, verb: string, arg: string, why: st
     const which: readonly Probe[] =
       arg === 'all' ? PROBES : PROBES.includes(arg as Probe) ? [arg as Probe] : []
     if (which.length === 0) return HELP
-    for (const probe of which) await setProbe($, probe, verb === 'on')
+    let warnings = ''
+    for (const probe of which) warnings += await setProbe($, probe, verb === 'on')
     const t = await refresh($)
     const stuck = which.filter(
       (probe): probe is HookProbe => probe !== 'labels' && t[probe].by === 'env' && t[probe].on !== (verb === 'on'),
@@ -309,14 +358,13 @@ async function runCommand($: EngineInterface, verb: string, arg: string, why: st
       stuck.length > 0
         ? ` ${stuck.join(', ')} stays ${verb === 'on' ? 'off' : 'on'}: an environment variable decides it for the hook.`
         : ''
-    return `yfx: ${describe(t)}.${note}`
+    return `yfx: ${describe(t)}.${note}${warnings}`
   }
   if (verb === 'label') {
     if (arg !== 'discovery' && arg !== 'delivery') return HELP
-    const move = await read($, pending)
-    if (move === null) return 'yfx: no unlabelled move (labels must be on before the turn).'
-    const count = await saveLabel($, move, arg, why)
-    return `yfx: labelled ${move.id} as ${arg}. ${count} stored for this project.`
+    const result = await saveLabel($, arg, why)
+    if (!result.saved) return `yfx: not labelled — ${result.reason}`
+    return `yfx: labelled ${result.id} as ${arg}. ${result.count} stored for this project.`
   }
   if (verb === 'export') return exportLabels($)
   return HELP

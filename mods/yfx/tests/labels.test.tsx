@@ -4,7 +4,7 @@ import type { Engine } from 'claude-code/testing'
 
 const ROOT = '/repo'
 const HOME = '/home/u'
-const LABELS = `${HOME}/.claude/yfx/labels/-repo.jsonl`
+const LABELS_DIR = `${HOME}/.claude/yfx/labels/`
 const ORIGIN = { kind: 'composer' } as const
 const PRESENTATION = { isFullscreen: false, columns: 120 }
 const BAND = {
@@ -59,9 +59,11 @@ const world = (on: On, root = ROOT, env: Record<string, string> = {}): World => 
     const [cmd, ...args] = e.argv
     let exitCode = 0
     if (cmd === 'rm') for (const path of args.slice(1)) files.delete(path)
-    if (cmd === 'git') exitCode = ignored.has(args[args.length - 1] ?? '') ? 0 : 1
+    let stdout = ''
+    if (cmd === 'git' && args.includes('check-ignore')) exitCode = ignored.has(args[args.length - 1] ?? '') ? 0 : 1
+    if (cmd === 'git' && args.includes('rev-parse')) stdout = '.git/info/exclude\n'
     return {
-      value: { exitCode, stdout: '', stderr: '', isStdoutTruncated: false, isStderrTruncated: false },
+      value: { exitCode, stdout, stderr: '', isStdoutTruncated: false, isStderrTruncated: false },
     }
   })
   on('ui.status', () => ({ value: undefined }))
@@ -100,7 +102,9 @@ test('a labelled turn is kept outside the repo and exported with its skill verdi
     await ui.unmount()
   }
 
-  const stored = JSON.parse(files.get(LABELS) ?? '{}')
+  const labelsFile = [...files.keys()].find(path => path.startsWith(LABELS_DIR)) ?? ''
+  expect(labelsFile).toMatch(/\/repo-[0-9a-f]{12}\.jsonl$/)
+  const stored = JSON.parse(files.get(labelsFile) ?? '{}')
   expect(stored.label).toBe('discovery')
   expect(stored.skillVerdict).toBe('useful')
   expect([...files.keys()].some(path => path.startsWith(`${ROOT}/`))).toBe(false)
@@ -113,7 +117,7 @@ test('a labelled turn is kept outside the repo and exported with its skill verdi
     id: blind.id,
     task: 'mode',
     prompt: PROMPT.text,
-    context: 'live; yfx skills fired: clarify',
+    context: 'live',
     resolution: 'Three directions: ...',
     prior_claim: null,
     skills: ['clarify'],
@@ -171,7 +175,8 @@ test('from a worktree: on writes the main marker and keeps it uncommitted; off c
 
   expect(await yfx($, 'on nudge')).toContain('nudge on')
   expect(files.has(`${ROOT}/.claude/recall-loop.on`)).toBe(true)
-  expect(files.get(`${ROOT}/.git/info/exclude`)).toBeUndefined() // no .git in this world
+  // Where git says the exclude file is (a file `.git` in a submodule or linked worktree too).
+  expect(files.get(`${ROOT}/.git/info/exclude`)).toBe('.claude/recall-loop.on\n')
 
   files.set(`${ROOT}/.claude/worktrees/wt/.claude/recall-loop.on`, '')
   expect(await yfx($, 'off nudge')).toContain('nudge off')
@@ -208,4 +213,62 @@ test('FRESH_LENS_TRIGGER=0 is not an override: the hook only reads "1"', async (
   const said = await yfx($, 'on lens')
   expect(said).toContain('lens on,')
   expect(said).not.toContain('stays')
+})
+
+test('a new prompt drops the unlabelled move, and the band hides while a turn runs', async ($, on) => {
+  world(on)
+  await $.session.start({ cwd: ROOT, surface: 'terminal', isInteractive: true })
+  await yfx($, 'on labels')
+  await $.prompt.submit(PROMPT)
+  await $.turn.complete(answered('first'))
+  const working = await $.ui.mount({
+    plugin: 'yfx',
+    surface: 'terminal',
+    component: 'AbovePrompt',
+    props: { ...BAND, isWorking: true },
+  })
+  expect(await working.find({ key: 'discovery' })).toBeUndefined()
+
+  await $.prompt.submit({ ...PROMPT, text: 'теперь просто сделай коммит этих изменений' })
+  expect(await (await band($)).find({ key: 'discovery' })).toBeUndefined()
+  expect(await yfx($, 'label delivery')).toContain('not labelled')
+})
+
+test('a band drawn for an earlier move redraws, and a press labels the move it shows now', async ($, on) => {
+  const { files } = world(on)
+  await $.session.start({ cwd: ROOT, surface: 'terminal', isInteractive: true })
+  await yfx($, 'on labels')
+  await $.prompt.submit(PROMPT)
+  await $.turn.complete(answered('first'))
+  const stale = await band($)
+  expect(await stale.find({ key: 'discovery' })).toBeDefined()
+
+  await $.prompt.submit({ ...PROMPT, text: 'а теперь второй содержательный вопрос про x' })
+  await $.turn.complete(answered('second', 't2'))
+  expect(await stale.find({ key: 'discovery' })).toBeDefined()
+  await stale.press({ key: 'discovery' })
+  const saved = files.get([...files.keys()].find(path => path.startsWith(LABELS_DIR)) ?? '') ?? ''
+  expect(JSON.parse(saved).answer).toBe('second')
+})
+
+test('an unreadable line costs itself, not the labels around it', async ($, on) => {
+  const { files } = world(on)
+  await $.session.start({ cwd: ROOT, surface: 'terminal', isInteractive: true })
+  await yfx($, 'on labels')
+  await $.prompt.submit(PROMPT)
+  await $.turn.complete(answered('ok'))
+  await yfx($, 'label discovery')
+  const path = [...files.keys()].find(one => one.startsWith(LABELS_DIR)) ?? ''
+  files.set(path, `${files.get(path)}{"torn\n`)
+  expect(await yfx($, '')).toContain('1 labelled moves')
+})
+
+test('from below a worktree root, lens follows the hook and ignores the main marker', async ($, on) => {
+  const { files } = world(on, `${ROOT}/.claude/worktrees/wt/sub`)
+  files.set(`${ROOT}/.claude/fresh-lens.on`, '')
+  files.set(`${ROOT}/.claude/recall-loop.on`, '')
+  await $.session.start({ cwd: ROOT, surface: 'terminal', isInteractive: true })
+  const said = await yfx($, '')
+  expect(said).toContain('nudge on')
+  expect(said).toContain('lens off')
 })

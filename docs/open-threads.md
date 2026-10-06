@@ -428,7 +428,7 @@ across agents as the primary reason. That reason is now subordinate. Why it is w
 **Not done:** `readiness.md` and `examples/AGENTS.md` are **frozen, not deleted** — kept as they
 are, not updated with new work. Revisit if a non-Claude user shows up.
 
-**Shipped first: `mods/yfx` 0.2.0** (installable via the root `.claude-plugin/marketplace.json`).
+**Shipped first: `mods/yfx` 0.2.1** (installable via the root `.claude-plugin/marketplace.json`).
 `/yfx on|off nudge|lens|labels` with the effective state on the status line (`nudge`/`lens` are
 the marker files the hooks read; the mod re-implements the hooks' precedence — worktree or main
 marker, env first — because it cannot import them, so the two must change together); with
@@ -439,8 +439,15 @@ delivery* and, when a yfx skill fired, *useful / noise*. Labels live outside eve
 `classify.mjs` / `score.mjs` at them (`prior_claim` is null there, so answer-key and echo read
 n/a). A `/code-review` pass on the first cut found ten defects — toggles that could disagree
 with the hooks, cross-project label leakage, an export the scorer could not read, a dropped
-verdict, stale prompts mislabelled — each now has a test. Unit-tested (`claude plugin test`,
-10); **not yet used in vivo** — the open risk is the band's own friction, the
+verdict, stale prompts mislabelled — each now has a test. A second pass found ten more; the one
+that mattered for the framework: the export put *which yfx skills fired* into `context`, which
+`classify.mjs` shows the foresight classifier — hindsight leaking into foresight, the very circle
+L0 exists to break. `context` is now `live` and the skills ride in their own field. The rest:
+a band that kept asking about the previous prompt during the next turn, presses on a stale move,
+a byte limit counted in characters, a lossy label-file name, a torn line breaking every label,
+`.git` as a file, and the lens hook's anchored worktree rule. After that, the repo rule became
+one `/code-review` per PR (CLAUDE.md): rounds kept finding fresh batches, not converging.
+Unit-tested (`claude plugin test`, 14); **not yet used in vivo** — the open risk is the band's own friction, the
 same over-ask failure the framework found in `/clarify`. Next candidate: the independent lens run
 by the mod itself (`$.agent`) at the commit boundary, shown to the user, not the executor.
 
