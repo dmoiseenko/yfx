@@ -1,7 +1,7 @@
 {
   "name": "yfx",
-  "version": "0.3.1",
-  "description": "y=f(x) in Claude Code: probe toggles on the status line, and in-session user labels (the eval gold tier)",
+  "version": "0.3.3",
+  "description": "y=f(x) in Claude Code: the always-on probes (x/y nudge, commit-boundary fresh-lens trigger) behind /yfx toggles, and in-session user labels (the eval gold tier)",
   "author": {
     "name": "Denis Moiseenko"
   },

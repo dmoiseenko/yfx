@@ -1,7 +1,8 @@
 // yfx in Claude Code: the framework's always-on probes, owned by one mod.
 //
 // 1. Probes, each off by default (CLAUDE.md) and per project; `/yfx on|off <probe>` flips them
-//    and the status line says what is on.
+//    and `/yfx` lists them. The status line stands only while a probe is on or an environment
+//    variable decides one (see showStatus).
 //    - nudge: the x/y diagnosis prompt (prompts/xy-nudge.md), attached to each substantive prompt
 //      the user types — what the UserPromptSubmit hook hooks/recall-context.mjs did. It rides the
 //      prompt, not the system prompt: a system-prompt section could reach a subagent, and the
@@ -76,10 +77,25 @@ const loadToggles = async ($: EngineInterface): Promise<YfxToggles> => ({
   labels: (await $.store.get(await probeKey($, 'labels'))) === true,
 })
 
+const isOn = (t: YfxToggles, probe: Probe) => (probe === 'labels' ? t.labels : t[probe].on)
+
+// Claude Code pins a plugin's status as a notice under the prompt, drawn (in the terminal, the
+// one surface seen so far) with its own "yfx:" and a ⚠ mark. So the line says no name of its
+// own, and it stands only while it has something to say: a probe on, or an environment
+// variable deciding one (RECALL_LOOP=0 included). "Everything off" is the default and needs no
+// standing ⚠; the first session after install says once where the switches are instead.
+let shownStatus: string | undefined
 const showStatus = ($: EngineInterface, t: YfxToggles) => {
+  const envDecides = t.nudge.by === 'env' || t.lens.by === 'env'
   const dot = (on: boolean) => (on ? '●' : '○')
   const probe = (name: string, s: YfxProbeState) => `${name}${dot(s.on)}${s.by === 'env' ? '(env)' : ''}`
-  $.ui.status(`yfx ${probe('nudge', t.nudge)} ${probe('lens', t.lens)} labels${dot(t.labels)}`)
+  const text =
+    PROBES.some(one => isOn(t, one)) || envDecides
+      ? `${probe('nudge', t.nudge)} ${probe('lens', t.lens)} labels${dot(t.labels)}`
+      : undefined
+  if (text === shownStatus) return // refresh runs on every prompt; say nothing new twice
+  shownStatus = text
+  $.ui.status(text)
 }
 
 const describe = (t: YfxToggles) => {
@@ -245,6 +261,11 @@ export const register: Register = on => {
       description: 'y=f(x): toggle the probes, label the last move, export labels',
       argumentHint: '[on|off <probe> | label <mode> [why] | export [path]]',
     })
+    shownStatus = undefined // a fresh load has drawn nothing yet
+    if ((await $.store.get('introduced')) !== true) {
+      $.ui.toast('yfx is installed, every probe off. /yfx shows them; /yfx on labels starts asking.')
+      await $.store.set('introduced', true)
+    }
     nudge = await loadPrompt($, 'xy-nudge')
     lensReminder = await loadPrompt($, 'fresh-lens')
     await refresh($)
@@ -335,17 +356,17 @@ export const register: Register = on => {
 
     return (
       <Box flexDirection="column">
-        <Box>
-          <Text dimColor>yfx · your last prompt was </Text>
+        <Box gap={1}>
+          <Text dimColor>yfx · your last prompt was</Text>
           <Button key="discovery" hotkey="1" label="discovery" onPress={label('discovery')} />
           <Button key="delivery" hotkey="2" label="delivery" onPress={label('delivery')} />
           <Button key="skip" hotkey="0" label="skip" onPress={() => update($, pending, () => null)} />
         </Box>
         {move.skills.length > 0 && (
-          <Box>
+          <Box gap={1}>
             <Text dimColor>
-              {move.skills.map(name => `/${name}`).join(' ')} this turn was{' '}
-              {move.skillVerdict === undefined ? '' : `${move.skillVerdict} · change: `}
+              {move.skills.map(name => `/${name}`).join(' ')} this turn was
+              {move.skillVerdict === undefined ? '' : ` ${move.skillVerdict} · change:`}
             </Text>
             <Button key="useful" hotkey="u" label="useful" onPress={verdict('useful')} />
             <Button key="noise" hotkey="n" label="noise" onPress={verdict('noise')} />

@@ -491,6 +491,16 @@ label), label ids carry a random tail (the tests caught two moves in one millise
 and `install.sh` names a settings file still wiring an old hook. A prompt typed over a running
 turn is not offered for a label — its answer is shared with the prompt before it.
 
+**First live use (mod 0.3.x).** The band works in a real session. What looked wrong: the
+buttons glued together (now spaced), and the status line — Claude Code pins a plugin status as
+a notice drawn `⚠ yfx: …`, so the mod's own name doubled and a standing ⚠ read as a fault in the
+default all-off state. This *changes* the 2026-10-06 "effective state on the status line": the
+line now stands only while a probe is on or an environment variable decides one (so
+`RECALL_LOOP=0`'s `(env)` still shows), `/yfx` always lists the state, and the first session
+after install toasts once where the switches are, since an all-off mod is otherwise invisible.
+Known limits: the ⚠ is the engine's, shown whenever a probe is on; the name-in-status
+observation is from the terminal only; the band's hotkeys work only once the band has focus.
+
 ## What shipped (done)
 
 - `/fresh-lens` skill (detect + audit), mandates embedded.

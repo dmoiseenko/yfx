@@ -32,6 +32,7 @@ type World = {
   files: Map<string, string>
   ignored: Set<string>
   contexts: (readonly string[] | undefined)[]
+  statuses: (string | undefined)[]
 }
 
 // The engine beneath the plugin: an in-memory filesystem, and git answering check-ignore from
@@ -45,6 +46,7 @@ const world = (
   const files = new Map<string, string>()
   const ignored = new Set<string>(['evals/out/live-dataset.jsonl'])
   const contexts: (readonly string[] | undefined)[] = []
+  const statuses: (string | undefined)[] = []
   mock.store(on, store)
   mock.env(on, { HOME, ...env })
   mock.clock(on, { now: 1_000 })
@@ -95,7 +97,10 @@ const world = (
       value: { exitCode, stdout, stderr: '', isStdoutTruncated: false, isStderrTruncated: false },
     }
   })
-  on('ui.status', () => ({ value: undefined }))
+  on('ui.status', (_$, e) => {
+    statuses.push(e.text)
+    return { value: undefined }
+  })
   on('ui.toast', () => ({ value: undefined }))
   // The engine's own band: an empty box.
   on('ui.render', ($, e) => {
@@ -103,7 +108,7 @@ const world = (
     return <Box key="engine" />
   })
   files.set(`${ROOT}/evals/score.mjs`, '// yfx')
-  return { files, ignored, contexts }
+  return { files, ignored, contexts, statuses }
 }
 
 const yfx = async ($: Engine, args: string) =>
@@ -345,4 +350,26 @@ test('lens: git global options before commit still trigger it', async ($, on) =>
   await $.session.start({ cwd: ROOT, surface: 'terminal', isInteractive: true })
   expect((await bash($, 'git -C /repo/.claude/worktrees/wt commit -m x')).context).toEqual(['LENS'])
   expect((await bash($, 'git commit-tree abc')).context).toBeUndefined()
+})
+
+test('status: shown only while a probe is on, with no name of its own', async ($, on) => {
+  const { statuses } = world(on)
+  await $.session.start({ cwd: ROOT, surface: 'terminal', isInteractive: true })
+  await yfx($, 'on labels')
+  await yfx($, 'off labels')
+  // The first, all-off session draws nothing; repeats are not sent again.
+  expect(statuses).toEqual(['nudge○ lens○ labels●', undefined])
+})
+
+test('status: an environment variable deciding a probe keeps the line, (env) marked', async ($, on) => {
+  const forcedOff = world(on, ROOT, { RECALL_LOOP: '0' })
+  await $.session.start({ cwd: ROOT, surface: 'terminal', isInteractive: true })
+  expect(forcedOff.statuses).toEqual(['nudge○(env) lens○ labels○'])
+})
+
+test('status: forced on by the environment', async ($, on) => {
+  const { statuses } = world(on, ROOT, { FRESH_LENS_TRIGGER: '1' })
+  await $.session.start({ cwd: ROOT, surface: 'terminal', isInteractive: true })
+  await yfx($, '')
+  expect(statuses).toEqual(['nudge○ lens●(env) labels○'])
 })
