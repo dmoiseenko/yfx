@@ -357,5 +357,19 @@ test('status: shown only while a probe is on, with no name of its own', async ($
   await $.session.start({ cwd: ROOT, surface: 'terminal', isInteractive: true })
   await yfx($, 'on labels')
   await yfx($, 'off labels')
-  expect(statuses).toEqual([undefined, 'nudge○ lens○ labels●', undefined])
+  // The first, all-off session draws nothing; repeats are not sent again.
+  expect(statuses).toEqual(['nudge○ lens○ labels●', undefined])
+})
+
+test('status: an environment variable deciding a probe keeps the line, (env) marked', async ($, on) => {
+  const forcedOff = world(on, ROOT, { RECALL_LOOP: '0' })
+  await $.session.start({ cwd: ROOT, surface: 'terminal', isInteractive: true })
+  expect(forcedOff.statuses).toEqual(['nudge○(env) lens○ labels○'])
+})
+
+test('status: forced on by the environment', async ($, on) => {
+  const { statuses } = world(on, ROOT, { FRESH_LENS_TRIGGER: '1' })
+  await $.session.start({ cwd: ROOT, surface: 'terminal', isInteractive: true })
+  await yfx($, '')
+  expect(statuses).toEqual(['nudge○ lens●(env) labels○'])
 })

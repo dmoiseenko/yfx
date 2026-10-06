@@ -142,7 +142,8 @@ Everything in it is off until you turn it on, per project (`/yfx on nudge|lens|l
 - `labels` (below).
 
 `RECALL_LOOP` / `FRESH_LENS_TRIGGER` (`1` or `0`) override `nudge` / `lens` for a session; the
-status line marks that `(env)`. `/yfx on labels` starts asking,
+status line marks that `(env)`. The status line shows only while a probe is on or a variable
+decides one; `/yfx` always lists the state. `/yfx on labels` starts asking,
 after each substantive turn, whether your prompt was *discovery* or *delivery* (and whether a yfx
 skill that fired was useful). Those are the user-supplied labels `evals/README.md` calls the gold
 tier. They are kept outside every repository (`~/.claude/yfx/labels/`, one append-only file per
