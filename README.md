@@ -4,6 +4,40 @@ Tools for fast, honest convergence between a user and an AI agent, framed as **`
 you iterate the context/prompt **x** until the output **y** satisfies. Extracted from a private
 project where it was developed and validated on real work.
 
+**In plain words.** yfx is a set of skills and a small mod for [Claude Code](https://claude.com/claude-code).
+When a coding agent does the wrong thing, it is usually not the model's fault: either it was
+missing a fact it needed (a past decision, a convention, an identifier), or the request could
+mean several things and it silently picked one. yfx gives the agent and the user three quick
+checks for this — fill the missing context, pick the intended goal, and ask an independent
+agent what both of you missed — so fewer rounds are wasted.
+
+**Status:** personal and experimental. Developed and validated on one private project (n=1);
+the ideas transfer, the numbers are not a promise for your codebase (see the caveat at the end).
+
+## What it looks like
+
+An illustrative exchange (not a transcript). The request is ambiguous, so `/clarify` names
+*which* part is unclear and offers concrete directions instead of guessing:
+
+```text
+you:    improve the dashboard
+
+agent:  (/clarify) "Improve" is open on one axis — the goal. Which one?
+          1. Speed: the strategy page takes long to render
+          2. Information: show a signal the code computes but hides today   ← recommended
+          3. Visual polish: header and badges
+             (dropped: memory shows they were just reworked)
+        Pick one, or tell me another.
+
+you:    2
+
+agent:  [works on option 2 — no wasted round on a direction you didn't want]
+```
+
+The other two checks follow the same pattern: `/recall` searches memory before acting when a
+needed fact is missing, and `/fresh-lens` hands the plan to a separate agent before an
+irreversible step (a commit, a merge) to catch what neither of you said out loud.
+
 ## The concept
 
 Working with an LLM is `y = f(x)`:
@@ -86,6 +120,7 @@ docs/
   mode-detector.md          — the discovery/delivery classifier (validated 8/8)
   nature-of-f.md            — properties of f; the y ≈ combine(f(x), g(x)) reframe (provisional)
   open-threads.md           — current state and what's still unresolved
+  portable-core.md          — the frozen tool-agnostic probe for Codex / other agents
 evals/          — L0 blind-label replay harness (classifier vs independent truth)
                   + the memory-provider language-bridge eval
 scripts/        — use-provider.mjs: switch the active provider card
@@ -152,13 +187,9 @@ into this checkout's `evals/out/` (give the path once from another project:
 `/yfx export ~/code/yfx`; refused unless that folder is gitignored), for
 `RUN=live node evals/score.mjs`.
 
-**The portable core (Codex, or any agent) — frozen.** Since 2026-10-06 the framework targets
-Claude Code only (why: [`docs/open-threads.md`](docs/open-threads.md)); what follows is kept
-as-is but no longer updated. The skills above are Claude Code packaging, but the
-heart of the loop — *is x sufficient, is y clear, right now?* — is one tool-agnostic probe that
-reads only the current chat. See [`readiness.md`](readiness.md). To wire it into Codex, copy
-[`examples/AGENTS.md`](examples/AGENTS.md) into your project's `AGENTS.md` (self-contained, no
-install). Any other agent: paste the probe as a preamble.
+**Other agents (Codex and others):** a tool-agnostic version of the core probe exists but is
+frozen since the framework moved to Claude Code only — see
+[`docs/portable-core.md`](docs/portable-core.md).
 
 **One honest caveat:** the framework was developed and validated on a single private project (n=1).
 The concepts and probes transfer; the specific numbers (mode 8/8, recall@k) come from that origin and
