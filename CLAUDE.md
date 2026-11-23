@@ -49,8 +49,11 @@ so it travels.
   Naming a provider in *rationale* is fine and sometimes required — `skills/recall/SKILL.md` says
   which provider each retrieval measurement was taken on, because a number without its provider
   is the very overreach this layer exists to stop.
-- **Every PR gets a `/code-review` that you run yourself, before it merges** — no PR merges
-  unreviewed, however small.
+- **Every PR gets a `/code-review high` before it merges, and you run it yourself** — don't wait
+  to be asked; if the user already ran one on that PR, that is its one pass. No PR merges
+  unreviewed, however small: unlike the warm, cheap-to-reverse steps `/2nd` exempts as friction,
+  a merge to `main` reaches every session that installs the mod, and the review runs in the
+  background without spending the user's attention.
 - **One `/code-review` per PR.** Run it once, fix its findings in the same PR, and don't run another
   pass on the fixes — each round of a high-effort review finds a fresh batch (PR #18: 10, then 10
   more), so repeated rounds don't converge. Say in the PR which findings were fixed, which were
