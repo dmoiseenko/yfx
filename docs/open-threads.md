@@ -571,3 +571,25 @@ text; that arm's numbers were already retracted, so no recorded result changes.
 - Mode detector validated 8/8 after a bias-guard fix that the dogfood run itself exposed.
 - Framework extracted to `yfx`; skills removed from the origin project (recall-context hook kept
   there — it's an independently-useful claude-mem backstop).
+
+## Update 2026-11-23 — does the accumulated memory help on its own? (`evals/memory-audit.mjs`)
+
+**Why.** The user's goal is that the memory a project accumulates helps *without* their help.
+`labels` measures something else (whether a move deserved a probe) and costs a judgement per
+prompt, so it was set aside for this question. `evals/memory-audit.mjs` needs no labels: it
+replays real transcripts and has an isolated judge mark what every memory that reached the agent
+did for the turn. Provider-neutral: the tool and the injection heading come from the card
+(new optional field `injection_marker`).
+
+**First run** (the one working project, `evals/RESULTS-memory-audit.md`): memory reached **13%**
+of 293 requests — mem0 injects on first requests only, as its card says, and the agent searched
+on 15. Of the 230 memories that arrived, **6.5% were used**, 0 misled; all 8 stale ones were
+pushed, and 6 of them snapshotted volatile state (current leader, open issues). On a third to a
+half of last week's requests the agent recovered project history itself — from the committed
+notes, journal and backlog. In that project the memory that works is the committed record,
+reached by grep; the provider adds little on top.
+
+**Open.** Whether to (a) make the x-lever lean on the committed record rather than the provider,
+(b) keep volatile state out of what the provider captures, or (c) push past the first prompt —
+each is a separate change, and (c) would multiply a 6%-used channel unless (b) comes first.
+n = 1 project, one judge, spot-checked on one request; judge variance unmeasured.

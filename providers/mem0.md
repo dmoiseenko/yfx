@@ -6,6 +6,7 @@ citable_ids: false
 expansion: none
 scope: [repo, dir, mine]
 auto_injection: first_prompt
+injection_marker: "Mem0 found these relevant memories"
 measured:
   eval: evals/memory-provider.mjs
   ratio: 0.9527

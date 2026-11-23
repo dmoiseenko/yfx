@@ -39,6 +39,11 @@ interface:
 | **scope** | how to narrow to this repo / directory / oneself |
 | **auto-injection** | what the provider already put in context, so the agent doesn't re-fetch it |
 
+One optional field, not an axis the agent reads: **`injection_marker`**, the heading the
+provider's automatic injection carries in a transcript (mem0: `Mem0 found these relevant
+memories`). [`evals/memory-audit.mjs`](../evals/memory-audit.mjs) uses it to tell pushed memories
+from fetched ones; a card without it is audited for searches only.
+
 The **query language** row is not a guess: it is measured per provider by
 [`evals/memory-provider.mjs`](../evals/memory-provider.mjs) under
 [`PROTOCOL-memory-provider.md`](../evals/PROTOCOL-memory-provider.md). A card that claims a
