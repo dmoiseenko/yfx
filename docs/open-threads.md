@@ -546,10 +546,13 @@ right outcome, and **that outcome looks exactly like a model that never ran the 
 nudge can't be evaluated while a silent pass and a skip are indistinguishable.
 
 **Change (mod 0.3.5).** The nudge now asks for the verdict as one line in the reasoning, before
-the first tool call: `x/y: none | x → /recall | y → /clarify | both` and the reason it turned on,
-kept out of the reply unless acted on. Against Open UU #2 (user attention is a finite budget):
-the line lives in the reasoning, not the reply, so a warm directive stream costs the user
-nothing extra. `evals/card-pull.mjs` reads the same file, so its `nudge` arm replays the new
+the model acts or answers: `x/y: none | x → /recall | y → /clarify | both` and what decided it,
+kept out of the reply unless it sends the model to `/recall` or `/clarify`, and skipped when
+there is no private reasoning (thinking off, some `claude -p` runs) so it can't leak into every
+reply. Against Open UU #2 (user attention is a finite budget): the line adds nothing to the
+reply, so a warm directive stream asks no extra reading of the user. It is not free: a few
+output tokens and some latency per nudged prompt, and one more line for whoever has
+`showThinkingSummaries` on. `evals/card-pull.mjs` reads the same file, so its `nudge` arm replays the new
 text; that arm's numbers were already retracted, so no recorded result changes.
 
 **Known limits.**

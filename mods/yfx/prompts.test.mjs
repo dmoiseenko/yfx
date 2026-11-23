@@ -32,7 +32,9 @@ test("the nudge asks for a visible verdict, kept out of the reply", () => {
   const text = prompt("xy-nudge");
   assert.ok(text.includes("`x/y: none | x → /recall | y → /clarify | both`"));
   assert.match(text, /in your reasoning/);
-  assert.match(text, /out of the reply/);
+  assert.match(text, /out of the reply unless it sends you to \/recall or \/clarify/);
+  // Without a private reasoning channel the line would land in every reply.
+  assert.match(text, /with no private reasoning, skip the line/);
 });
 
 // The mod fills the slot with the file's real path (install.sh links it into the user's Claude
