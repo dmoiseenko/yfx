@@ -518,12 +518,19 @@ card-pull `nudge` arm never saw this: `makeProject` stages the skills at the san
 nudge arm measured a condition live sessions never had (that arm's numbers were already
 retracted as noise, so no recorded result changes).
 
-**Fix (mod 0.3.4).** `prompts/xy-nudge.md` holds a `{{xy-diagnosis}}` slot; the mod fills it at
-session start with the file's real path (the project's copy first, as in the evals, then
-`$CLAUDE_CONFIG_DIR` or `~/.claude`), and with neither it drops the reference rather than leave
-it dangling. `evals/card-pull.mjs` fills the slot the way the mod would in its sandbox, so "same
-words, one file" holds. The delivered nudge is otherwise unchanged, so its re-validation debt
-stays open; the cheapest real evidence is `labels` on in the project where the nudge runs.
+**Fix (mod 0.3.4).** `prompts/xy-nudge.md` holds a ` ({{xy-diagnosis}})` slot; the mod fills it
+at session start with the file's absolute path (the project's copy first, as in the evals, then
+`$CLAUDE_CONFIG_DIR`, then `~/.claude`, where `install.sh` links by default), and with none — or
+if the lookup fails — it drops the reference rather than leave it dangling, without taking the
+lens probe or the status line down with it. `evals/card-pull.mjs` fills the slot per run with the
+absolute path the mod would write in its sandbox, so "same words, one file" holds. The delivered
+nudge is otherwise unchanged, so its re-validation debt stays open; the cheapest real evidence is
+`labels` on in the project where the nudge runs.
+
+**Known limit.** The path now exists, but it lies outside the session's project (a symlink under
+the user's Claude directory into the yfx checkout). Whether a live model reads it without a
+permission prompt in the default mode is unverified — the project where the nudge runs uses
+`auto`. If reads stay at 0 after this ships, the next lever is the text, not the path.
 
 ## What shipped (done)
 

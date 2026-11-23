@@ -123,23 +123,35 @@ const loadPrompt = async ($: EngineInterface, name: string) => {
   }
 }
 
+// `||`, not `??`: a set-but-empty CLAUDE_CONFIG_DIR must not put labels under `/yfx/labels`.
 const configDir = async ($: EngineInterface) =>
-  (await $.env.get('CLAUDE_CONFIG_DIR')) ?? `${await $.env.get('HOME')}/.claude`
+  (await $.env.get('CLAUDE_CONFIG_DIR')) || `${await $.env.get('HOME')}/.claude`
 
 // The nudge points the model at the full x/y diagnosis, so it must name where that file really
 // is. It held a relative `.claude/skills/xy-diagnosis.md`, which resolves only in a project that
 // carries its own copy — the evals' sandbox does, but install.sh links the skills into the
 // user's Claude directory, so in every live session the nudge pointed at nothing. The prompt
-// file keeps a slot; the project's copy wins (as in the evals), then the installed one, and with
-// neither the reference is dropped rather than left dangling.
+// file keeps a ` ({{xy-diagnosis}})` slot (prompts.test.mjs holds that form); the project's copy
+// wins (as in the evals), then the Claude config directory, then ~/.claude (install.sh's
+// default, which ignores CLAUDE_CONFIG_DIR). With none, or if looking fails, the reference is
+// dropped rather than left dangling — and the failure stays the nudge's: session.start must
+// still load the lens reminder and the status line.
 const XY_SLOT = '{{xy-diagnosis}}'
+const dropDiagnosis = (text: string) => text.replace(` (${XY_SLOT})`, '').replace(XY_SLOT, '')
 const placeDiagnosis = async ($: EngineInterface, text: string) => {
   if (!text.includes(XY_SLOT)) return text
-  const { here } = await roots($)
-  for (const path of [`${here}/.claude/skills/xy-diagnosis.md`, `${await configDir($)}/skills/xy-diagnosis.md`]) {
-    if (await $.fs.exists(path)) return text.replace(XY_SLOT, path)
-  }
-  return text.replace(` (${XY_SLOT})`, '').replace(XY_SLOT, 'xy-diagnosis.md')
+  try {
+    const { here } = await roots($)
+    const candidates = [
+      `${here}/.claude/skills/xy-diagnosis.md`,
+      `${await configDir($)}/skills/xy-diagnosis.md`,
+      `${await $.env.get('HOME')}/.claude/skills/xy-diagnosis.md`,
+    ]
+    for (const path of candidates) {
+      if (await $.fs.exists(path)) return text.replace(XY_SLOT, () => path) // `$` in a path stays literal
+    }
+  } catch {}
+  return dropDiagnosis(text)
 }
 
 // Labels live in one JSONL file per project under the user's Claude directory: never inside a

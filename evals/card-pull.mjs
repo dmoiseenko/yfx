@@ -45,11 +45,8 @@ import { join } from "node:path";
 import { ROOT, REPO, MODEL } from "./lib.mjs";
 import { PROBE_TOOL, DECOY_TOOLS } from "./probe-mcp.mjs";
 // The very text the yfx mod attaches (mods/yfx/prompts/xy-nudge.md), read from the same file.
-// Its {{xy-diagnosis}} slot gets what the mod fills in here: makeProject stages the file at the
-// project's .claude/skills/, and the mod prefers the project's copy.
-const XY_NUDGE = readFileSync(join(REPO, "mods", "yfx", "prompts", "xy-nudge.md"), "utf8")
-  .trim()
-  .replace("{{xy-diagnosis}}", ".claude/skills/xy-diagnosis.md");
+// Its {{xy-diagnosis}} slot is filled per run (see run()) with what the mod would write there.
+const XY_NUDGE = readFileSync(join(REPO, "mods", "yfx", "prompts", "xy-nudge.md"), "utf8").trim();
 
 const pexec = promisify(execFile);
 const KNOWN_ARMS = ["pull", "nudge", "push", "control"];
@@ -176,7 +173,12 @@ async function run(arm, gate, prompt, cfg) {
     // would label its block anyway.
     if (arm === "push") text = `[memory] active provider card:\n\n${CARD}\n\nThe request:\n\n${text}`;
     // Verbatim from the shipped mod, so this arm tests the real artifact rather than a paraphrase.
-    if (arm === "nudge") text = `${XY_NUDGE}\n\n${text}`;
+    // Its slot gets the path the mod writes in this sandbox: makeProject stages the file at the
+    // project's .claude/skills/, which the mod prefers — absolute, as the mod's is.
+    if (arm === "nudge") {
+      const diagnosis = join(dir, ".claude", "skills", "xy-diagnosis.md");
+      text = `${XY_NUDGE.replace("{{xy-diagnosis}}", () => diagnosis)}\n\n${text}`;
+    }
 
     const mcpConfig = JSON.stringify({
       mcpServers: {

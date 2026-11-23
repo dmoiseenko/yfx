@@ -42,6 +42,7 @@ const world = (
   root = ROOT,
   env: Record<string, string> = {},
   store: Record<string, unknown> = {},
+  existsFails = false,
 ): World => {
   const files = new Map<string, string>()
   const ignored = new Set<string>(['evals/out/live-dataset.jsonl'])
@@ -60,7 +61,7 @@ const world = (
   on('turn.complete', (_$, e) => ({ text: e.answer }))
   on('skill.prompt', (_$, e) => ({ text: e.text }))
   on('session.root', () => ({ value: root }))
-  on('fs.exists', (_$, e) => ({
+  on('fs.exists', (_$, e) => existsFails && e.path.includes('/skills/') ? { deny: 'EACCES' } : ({
     value: files.has(e.path) || [...files.keys()].some(path => path.startsWith(`${e.path}/`)),
   }))
   on('fs.stat', (_$, e) => {
@@ -228,6 +229,9 @@ for (const [name, files, env, said] of [
   ['installed in the user\'s Claude directory', [INSTALLED], {}, `NUDGE (${INSTALLED})`],
   ['the project\'s own copy wins, as in the evals', [INSTALLED, IN_PROJECT], {}, `NUDGE (${IN_PROJECT})`],
   ['CLAUDE_CONFIG_DIR moves the installed one', ['/cfg/skills/xy-diagnosis.md'], { CLAUDE_CONFIG_DIR: '/cfg' }, 'NUDGE (/cfg/skills/xy-diagnosis.md)'],
+  ['~/.claude still counts when CLAUDE_CONFIG_DIR is set (install.sh ignores it)', [INSTALLED], { CLAUDE_CONFIG_DIR: '/cfg' }, `NUDGE (${INSTALLED})`],
+  ['an empty CLAUDE_CONFIG_DIR means ~/.claude', [INSTALLED], { CLAUDE_CONFIG_DIR: '' }, `NUDGE (${INSTALLED})`],
+  ['a `$` in the path stays literal', ['/c$&fg/skills/xy-diagnosis.md'], { CLAUDE_CONFIG_DIR: '/c$&fg' }, 'NUDGE (/c$&fg/skills/xy-diagnosis.md)'],
 ] as const) {
   test(`nudge: the diagnosis file, ${name}`, async ($, on) => {
     const w = world(on, ROOT, env, { [`nudge-on:${ROOT}`]: true })
@@ -237,6 +241,15 @@ for (const [name, files, env, said] of [
     expect(w.contexts).toEqual([[said]])
   })
 }
+
+test('nudge: a failed lookup drops the reference and leaves lens and status working', async ($, on) => {
+  const w = world(on, ROOT, {}, { [`nudge-on:${ROOT}`]: true, [`lens-on:${ROOT}`]: true }, true)
+  await $.session.start({ cwd: ROOT, surface: 'terminal', isInteractive: true })
+  await $.prompt.submit(PROMPT)
+  expect(w.contexts).toEqual([['NUDGE']])
+  expect((await bash($, 'git commit -m x')).context).toEqual(['LENS'])
+  expect(w.statuses.at(-1)).toBe('nudge● lens● labels○')
+})
 
 test('nudge: RECALL_LOOP=0 wins over the toggle and says so — the evals\' clean control', async ($, on) => {
   const { contexts } = world(on, ROOT, { RECALL_LOOP: '0' })

@@ -29,6 +29,8 @@ test("the nudge still routes to both levers", () => {
 // directory); a relative `.claude/skills/...` written into the text pointed at nothing live.
 test("the nudge names the diagnosis file through the slot, not a fixed path", () => {
   assert.equal(prompt("xy-nudge").split("{{xy-diagnosis}}").length, 2);
+  // In this form the mod can drop the reference cleanly when no copy is installed.
+  assert.ok(prompt("xy-nudge").includes(" ({{xy-diagnosis}})"));
   assert.ok(!prompt("xy-nudge").includes(".claude/skills/"));
 });
 
