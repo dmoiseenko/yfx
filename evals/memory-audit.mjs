@@ -105,8 +105,9 @@ const resultText = (c) =>
 const toolMatches = (name) =>
   !!TOOL && (name === TOOL || (name.endsWith(`__${TOOL}`) && name.includes(card.provider)));
 // Memories arrive as a numbered list (`1. …\n2. …`), the shape mem0 uses. Items are split only at
-// the NEXT number in sequence, so a memory carrying its own "1. step" list stays one item; text
-// with no list at all counts as one memory, so another provider's shape is not read as zero.
+// the NEXT number in sequence, so a memory carrying its own "1. step" list stays one item. Text
+// with no list ("No matching memories found.", a failure without is_error) is no memory at all;
+// a provider with another result shape needs its own splitter (evals/README.md).
 const splitMemories = (text) => {
   const items = [];
   for (const part of text.split(/\n(?=\d+\.\s)/)) {
@@ -114,9 +115,7 @@ const splitMemories = (text) => {
     if (n === items.length + 1) items.push(part.trim());
     else if (items.length) items[items.length - 1] += `\n${part}`;
   }
-  if (items.length) return items;
-  const whole = text.trim();
-  return whole ? [whole] : [];
+  return items;
 };
 // A slash command the user typed, as `/name args`, or null for anything else in angle brackets.
 const commandOf = (text) => {
@@ -131,6 +130,7 @@ const commandOf = (text) => {
 // prompt or a slash command (`/recall …`, `/loop`) opens a new move; a short follow-up ("да",
 // "ok go") continues the current one, because the work it releases — searches included — belongs
 // to the request it answers. Nothing the agent does after the first typed message is dropped.
+const SEEN = new Set();
 function extractMoves(lines, session) {
   const moves = [];
   let cur = null;
@@ -140,6 +140,12 @@ function extractMoves(lines, session) {
     let r;
     try { r = JSON.parse(line); } catch { continue; }
     if (r.isSidechain) continue;
+    // A forked session's file starts with a copy of its parent's records, same uuids: count each
+    // record once across all files, or the copied prompts are audited twice.
+    if (r.uuid) {
+      if (SEEN.has(r.uuid)) continue;
+      SEEN.add(r.uuid);
+    }
     if (r.type === "user" && r.origin?.kind === "human" && !r.isMeta) {
       const raw = textOf(r.message?.content);
       const command = commandOf(raw);
@@ -181,6 +187,10 @@ function extractMoves(lines, session) {
   return moves;
 }
 
+if (!files.length) {
+  console.error(`no transcripts under ${projectsDir} for ${slug} — is the path the one the sessions ran in?`);
+  process.exit(1);
+}
 let moves = [];
 for (const f of files) {
   const session = `${basename(join(f, "..")).slice(slug.length) || "."}/${basename(f, ".jsonl").slice(0, 8)}`;

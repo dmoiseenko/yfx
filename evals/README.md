@@ -138,7 +138,7 @@ Per-prompt rows go to `out/memory-audit-<project>….jsonl` and hold the project
 A move is one request: a substantive prompt or a slash command opens one, and a short follow-up
 ("да") continues it, so the work it releases is not lost. Memories are split as a numbered list
 (`1. …\n2. …`, mem0's shape), only at the next number in sequence; a result with no list counts as
-one memory, and a failed search (`is_error`) as none. Another provider's shape may need its own
+no memory, and neither does a failed search (`is_error`). Another provider's shape may need its own
 splitter before its item counts mean anything. The judge sees the
 transcript, not the repository, so `stale` means "contradicted by something the agent saw in that
 turn" — a memory that is wrong about something the turn never touched is invisible to it.
