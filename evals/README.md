@@ -114,6 +114,29 @@ nouns were neutralized for public release.
 - `prior_claim` — the label the old self-referential score rested on. Used **only** for echo
   detection; never shown to the classifier or the labeler.
 
+## memory-audit.mjs — does the project's memory help, with no one labelling
+
+The labels above answer "did this move deserve a probe" and cost the user a judgement per
+prompt. This answers a different question without any: **what did the memory that reached the
+agent do for the turn?** It replays a project's real transcripts (its main checkout and its
+`.claude/worktrees/*`), takes every substantive prompt the user typed, and records which
+memories were injected (found by the active card's `injection_marker`) and which the agent
+fetched (calls to the card's `tool`). An isolated judge (`claude()` from `lib.mjs`) sees the
+prompt, those memories, a clipped trace of the turn and the reply, and marks each memory
+`used | redundant | irrelevant | stale | misled`, plus a per-turn `gap`: the agent recovered
+project history (a past measurement or decision) from notes, docs or git that no memory gave it.
+
+```bash
+node evals/memory-audit.mjs ~/code/<project> --dry                       # counts only, no judge
+node evals/memory-audit.mjs ~/code/<project> --memory-only               # verdicts on every prompt memory reached
+node evals/memory-audit.mjs ~/code/<project> --since 2026-11-16          # every prompt in a window: the gap rate
+```
+
+Per-prompt rows go to `out/memory-audit-<project>….jsonl` and hold the project's private text —
+`out/` is gitignored; commit only the aggregate (`RESULTS-memory-audit.md`). The judge sees the
+transcript, not the repository, so `stale` means "contradicted by something the agent saw in that
+turn" — a memory that is wrong about something the turn never touched is invisible to it.
+
 ## second-opinion.mjs — /2nd hit/false-alarm A/B + independence ablation
 
 The debt recorded in `docs/open-threads.md`: `/2nd` was promoted on n=1 and owes the same bar
