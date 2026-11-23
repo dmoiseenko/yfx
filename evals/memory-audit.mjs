@@ -46,7 +46,9 @@ const flag = (name, dflt) => {
   const i = argv.indexOf(`--${name}`);
   return i === -1 ? dflt : argv[i + 1];
 };
-const project = argv.find((a, i) => !a.startsWith("--") && !argv[i - 1]?.startsWith("--"));
+// Only these flags take a value; `--dry` and `--memory-only` do not, so a path may follow them.
+const VALUED = new Set(["--since", "--limit", "--jobs"]);
+const project = argv.find((a, i) => !a.startsWith("--") && !VALUED.has(argv[i - 1]));
 if (!project) {
   console.error("usage: node evals/memory-audit.mjs <project path> [--since YYYY-MM-DD] [--memory-only] [--limit N] [--jobs N] [--dry]");
   process.exit(2);
@@ -97,16 +99,38 @@ const clip = (s, n) => (s.length > n ? `${s.slice(0, n)}…[${s.length - n} more
 const isSubstantive = (t) => t.trim().length >= 20 && /[A-Za-zА-Яа-яЁё]/.test(t);
 const resultText = (c) =>
   typeof c === "string" ? c : (c || []).map((b) => (b.type === "text" ? b.text : `[${b.type}]`)).join("\n");
-const toolMatches = (name) => TOOL && (name === TOOL || name.endsWith(`__${TOOL}`));
-// Injected and fetched memories arrive as a numbered list; one item per memory.
-const splitMemories = (text) =>
-  text
-    .split(/\n(?=\d+\.\s)/)
-    .map((s) => s.replace(/^[^\n]*?(?=\d+\.\s)/, "").trim())
-    .filter((s) => /^\d+\.\s/.test(s));
+// A card names either the full tool (mem0: `mcp__plugin_mem0_mem0__search_memories`) or a bare
+// one (claude-mem: `search`). A bare name matches only on the provider's own server, so another
+// server's `search` tool is not counted as memory.
+const toolMatches = (name) =>
+  !!TOOL && (name === TOOL || (name.endsWith(`__${TOOL}`) && name.includes(card.provider)));
+// Memories arrive as a numbered list (`1. …\n2. …`), the shape mem0 uses. Items are split only at
+// the NEXT number in sequence, so a memory carrying its own "1. step" list stays one item; text
+// with no list at all counts as one memory, so another provider's shape is not read as zero.
+const splitMemories = (text) => {
+  const items = [];
+  for (const part of text.split(/\n(?=\d+\.\s)/)) {
+    const n = Number(part.match(/^(\d+)\.\s/)?.[1]);
+    if (n === items.length + 1) items.push(part.trim());
+    else if (items.length) items[items.length - 1] += `\n${part}`;
+  }
+  if (items.length) return items;
+  const whole = text.trim();
+  return whole ? [whole] : [];
+};
+// A slash command the user typed, as `/name args`, or null for anything else in angle brackets.
+const commandOf = (text) => {
+  const name = text.match(/<command-name>([^<]*)<\/command-name>/)?.[1];
+  if (!name) return null;
+  const args = text.match(/<command-args>([\s\S]*?)<\/command-args>/)?.[1] ?? "";
+  return `${name.trim()} ${args.trim()}`.trim();
+};
 
-// One move = one prompt the user typed, plus everything the agent did until the next one —
-// including turns woken by task notifications, which finish the same request.
+// One move = one request the user typed, plus everything the agent did until the next one —
+// including turns woken by task notifications, which finish the same request. A substantive
+// prompt or a slash command (`/recall …`, `/loop`) opens a new move; a short follow-up ("да",
+// "ok go") continues the current one, because the work it releases — searches included — belongs
+// to the request it answers. Nothing the agent does after the first typed message is dropped.
 function extractMoves(lines, session) {
   const moves = [];
   let cur = null;
@@ -117,13 +141,17 @@ function extractMoves(lines, session) {
     try { r = JSON.parse(line); } catch { continue; }
     if (r.isSidechain) continue;
     if (r.type === "user" && r.origin?.kind === "human" && !r.isMeta) {
-      const text = textOf(r.message?.content);
-      if (!text.startsWith("<") && !text.startsWith("[Request interrupted")) {
+      const raw = textOf(r.message?.content);
+      const command = commandOf(raw);
+      const text = command ?? raw;
+      if ((command || !raw.startsWith("<")) && !raw.startsWith("[Request interrupted")) {
         position += 1;
-        cur = isSubstantive(text)
-          ? { session, ts: r.timestamp, position, prompt: text, push: [], pull: [], trace: [], reply: [] }
-          : null;
-        if (cur) moves.push(cur);
+        if (command || isSubstantive(text) || !cur) {
+          cur = { session, ts: r.timestamp, position, prompt: text, push: [], pull: [], trace: [], reply: [] };
+          moves.push(cur);
+        } else {
+          cur.trace.push(`[user follow-up] ${clip(text, 200)}`);
+        }
         continue;
       }
     }
@@ -144,7 +172,8 @@ function extractMoves(lines, session) {
         if (b.type !== "tool_result") continue;
         const t = resultText(b.content);
         const call = pullCalls.get(b.tool_use_id);
-        if (call) call.move.pull.push({ query: call.query, memories: splitMemories(`\n${t}`) });
+        // A refused or failed search (is_error) returned no memories, whatever its text says.
+        if (call) call.move.pull.push({ query: call.query, failed: !!b.is_error, memories: b.is_error ? [] : splitMemories(`\n${t}`) });
         cur.trace.push(`← ${clip(t.replace(/\s+/g, " "), 400)}`);
       }
     }
@@ -161,6 +190,11 @@ if (SINCE) moves = moves.filter((m) => m.ts >= SINCE);
 moves.sort((a, b) => a.ts.localeCompare(b.ts));
 
 // ---------- deterministic counts (no judge) ----------
+// One definition of "memory reached the prompt", used by the counts and the judged summary alike:
+// at least one memory arrived, pushed or fetched. A search that returned nothing is a search, not
+// memory, and is counted on its own line.
+const pulledCount = (m) => m.pull.reduce((n, p) => n + p.memories.length, 0);
+const reached = (m) => m.push.length > 0 || pulledCount(m) > 0;
 const withPush = moves.filter((m) => m.push.length);
 const withPull = moves.filter((m) => m.pull.length);
 const first = moves.filter((m) => m.position === 1);
@@ -173,8 +207,11 @@ const det = {
   push_on_first_prompt: first.filter((m) => m.push.length).length,
   first_prompts: first.length,
   push_on_later_prompt: withPush.filter((m) => m.position > 1).length,
-  moves_with_pull: withPull.length,
-  moves_with_no_memory: moves.filter((m) => !m.push.length && !m.pull.length).length,
+  moves_with_search: withPull.length,
+  moves_where_search_returned_nothing: withPull.filter((m) => pulledCount(m) === 0).length,
+  failed_searches: moves.reduce((n, m) => n + m.pull.filter((p) => p.failed).length, 0),
+  moves_memory_reached: moves.filter(reached).length,
+  moves_with_no_memory: moves.filter((m) => !reached(m)).length,
 };
 
 console.log(isolationReport("judge"));
@@ -183,26 +220,43 @@ console.log(JSON.stringify(det, null, 2));
 if (DRY) process.exit(0);
 // The counts above cover the whole window; the judge gets the selection (and --limit keeps the
 // most recent N of it).
-if (MEMORY_ONLY) moves = moves.filter((m) => m.push.length || m.pull.length);
+if (MEMORY_ONLY) moves = moves.filter(reached);
 if (moves.length > LIMIT) moves = moves.slice(-LIMIT);
 
 // ---------- the judge ----------
 const VERDICTS = ["used", "redundant", "irrelevant", "stale", "misled"];
-const BUDGET = 45000; // characters; argv must stay well under Linux's 128 KiB per-argument limit
+// The prompt goes to `claude -p` as one argv string, and Linux caps one argument at 128 KiB —
+// in BYTES, and Cyrillic takes two per character. Stay well under it, measured in bytes.
+const MAX_BYTES = 96 * 1024;
+const bytes = (s) => Buffer.byteLength(s, "utf8");
 
 function judgePrompt(m) {
   const mems = [
     ...m.push.map((t, i) => ({ id: `P${i + 1}`, t })),
     ...m.pull.flatMap((p, j) => p.memories.map((t, i) => ({ id: `Q${j + 1}.${i + 1}`, t }))),
   ];
-  const memBlock = mems.length ? mems.map((x) => `${x.id}: ${clip(x.t, 700)}`).join("\n") : "(none)";
+  // Every memory must be shown to get a verdict, so a turn with many shrinks each one instead.
+  const per = Math.max(160, Math.min(700, Math.floor(20000 / Math.max(1, mems.length))));
+  const memBlock = mems.length ? mems.map((x) => `${x.id}: ${clip(x.t, per)}`).join("\n") : "(none)";
   const queries = m.pull.map((p, j) => `Q${j + 1} query: ${clip(p.query, 200)}`).join("\n") || "(no search)";
-  const reply = m.reply.join("\n\n");
-  const fixed = 4000 + m.prompt.length + memBlock.length + queries.length;
-  const replyBudget = Math.min(reply.length, 9000);
-  let traceBudget = Math.max(2000, BUDGET - fixed - replyBudget);
+  const build = (trace, reply) => template(clip(m.prompt, 3000), memBlock, queries, trace, reply);
   let trace = m.trace.join("\n");
-  if (trace.length > traceBudget) trace = `${trace.slice(0, traceBudget / 2)}\n…[trace clipped]…\n${trace.slice(-traceBudget / 2)}`;
+  let reply = clip(m.reply.join("\n\n"), 9000);
+  let text = build(trace, reply);
+  // Shrink the trace's middle first, then the reply, until the prompt fits.
+  while (bytes(text) > MAX_BYTES && trace.length > 2000) {
+    const keep = Math.floor(trace.length / 4);
+    trace = `${trace.slice(0, keep)}\n…[trace clipped]…\n${trace.slice(-keep)}`;
+    text = build(trace, reply);
+  }
+  while (bytes(text) > MAX_BYTES && reply.length > 1000) {
+    reply = clip(reply, Math.floor(reply.length / 2));
+    text = build(trace, reply);
+  }
+  return { text, ids: mems.map((x) => x.id) };
+}
+
+function template(prompt, memBlock, queries, trace, reply) {
   return `You are auditing whether a project's MEMORY helped an AI coding agent on one request. You see the user's request, the memories that reached the agent (P* were injected automatically, Q* were returned by searches the agent made), a clipped trace of the agent's tool calls (→) and their results (←), and the agent's reply. You do NOT see the repository; judge only from what is shown.
 
 Classify EVERY memory id with exactly one verdict:
@@ -220,7 +274,7 @@ Reply with ONLY this JSON, no prose:
 {"memories":[{"id":"P1","verdict":"used|redundant|irrelevant|stale|misled","why":"<=20 words"}],"gap":true|false,"gap_what":"<=15 words: what history the agent recovered, or empty","effect":"helped|neutral|hurt"}
 
 === USER REQUEST ===
-${clip(m.prompt, 3000)}
+${prompt}
 
 === MEMORIES ===
 ${memBlock}
@@ -230,20 +284,36 @@ ${queries}
 ${trace}
 
 === REPLY ===
-${clip(reply, replyBudget)}`;
+${reply}`;
 }
 
+// The judge's verdicts are kept only for ids it was shown; ids it skipped are recorded, not
+// guessed. `effect` is derived from the verdicts, never taken from the judge, so the per-prompt
+// effect cannot disagree with the verdict table.
 async function judge(m) {
-  const raw = await claude(judgePrompt(m), MODEL);
+  const { text, ids } = judgePrompt(m);
+  const raw = await claude(text, MODEL);
   const j = firstJson(raw);
   if (!j || !Array.isArray(j.memories)) return { error: clip(raw, 200) };
-  j.memories = j.memories.filter((x) => VERDICTS.includes(x.verdict));
-  return j;
+  const known = new Set(ids);
+  const seen = new Set();
+  const memories = j.memories.filter(
+    (x) => x && typeof x.id === "string" && known.has(x.id) && VERDICTS.includes(x.verdict) && !seen.has(x.id) && seen.add(x.id),
+  );
+  const v = (k) => memories.some((x) => x.verdict === k);
+  return {
+    memories,
+    unjudged: ids.filter((id) => !seen.has(id)),
+    gap: j.gap === true,
+    gap_what: typeof j.gap_what === "string" ? j.gap_what : "",
+    effect: v("misled") ? "hurt" : v("used") ? "helped" : "neutral",
+  };
 }
 
 const outDir = join(ROOT, "out");
 mkdirSync(outDir, { recursive: true });
-const name = `${basename(realpathSync(project))}${MEMORY_ONLY ? "-memory" : ""}${SINCE ? `-since-${SINCE}` : ""}`;
+const name = `${basename(realpathSync(project))}${MEMORY_ONLY ? "-memory" : ""}${SINCE ? `-since-${SINCE}` : ""}${
+  Number.isFinite(LIMIT) ? `-limit-${LIMIT}` : ""}`;
 const rows = new Array(moves.length);
 let next = 0;
 let done = 0;
@@ -255,7 +325,7 @@ await Promise.all(
       const verdict = await judge(m);
       rows[i] = {
         session: m.session, ts: m.ts, position: m.position, prompt: clip(m.prompt, 300),
-        push: m.push.length, pull_calls: m.pull.length, pulled: m.pull.reduce((n, p) => n + p.memories.length, 0),
+        push: m.push.length, pull_calls: m.pull.length, pulled: pulledCount(m),
         ...verdict,
       };
       done += 1;
@@ -283,6 +353,7 @@ const summary = {
   memory_only: MEMORY_ONLY,
   judged: judged.length,
   judge_errors: rows.length - judged.length,
+  memories_unjudged: judged.reduce((n, r) => n + r.unjudged.length, 0),
   memory_verdicts: memVerdicts,
   effect_when_memory_present: {
     moves: withMemory.length,

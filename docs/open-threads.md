@@ -582,14 +582,14 @@ did for the turn. Provider-neutral: the tool and the injection heading come from
 (new optional field `injection_marker`).
 
 **First run** (the one working project, `evals/RESULTS-memory-audit.md`): memory reached **13%**
-of 277 typed prompts — mem0 injects on first prompts only, as its card says, and the agent
-searched on 12. Of the 217 memories that arrived, **3% were used**, 0 misled; all 7 stale ones were
-pushed, and 6 of them snapshotted volatile state (current leader, open issues). On 35% of last week's
-prompts the agent recovered project history itself — from the committed notes, journal and
-backlog. In that project the memory that works is the committed record, reached by grep; the
-provider adds little on top.
+of 293 requests — mem0 injects on first requests only, as its card says, and the agent searched
+on 15. Of the 230 memories that arrived, **6.5% were used**, 0 misled; all 8 stale ones were
+pushed, and 6 of them snapshotted volatile state (current leader, open issues). On a third to a
+half of last week's requests the agent recovered project history itself — from the committed
+notes, journal and backlog. In that project the memory that works is the committed record,
+reached by grep; the provider adds little on top.
 
 **Open.** Whether to (a) make the x-lever lean on the committed record rather than the provider,
 (b) keep volatile state out of what the provider captures, or (c) push past the first prompt —
-each is a separate change, and (c) would multiply the 3%-used channel unless (b) comes first.
-n = 1 project, one judge, spot-checked on one prompt.
+each is a separate change, and (c) would multiply a 6%-used channel unless (b) comes first.
+n = 1 project, one judge, spot-checked on one request; judge variance unmeasured.
