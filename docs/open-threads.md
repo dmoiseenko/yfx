@@ -532,6 +532,38 @@ the user's Claude directory into the yfx checkout). Whether a live model reads i
 permission prompt in the default mode is unverified — the project where the nudge runs uses
 `auto`. If reads stay at 0 after this ships, the next lever is the text, not the path.
 
+## Update 2026-11-23 (later) — the nudge asks for a visible verdict
+
+**Second look, after 0.3.4.** In the same project, with `showThinkingSummaries` turned on in its
+untracked `.claude/settings.local.json` (a project-scope setting is enough; thinking had been
+empty in every transcript before), one new session got the fixed nudge three times. The absolute
+path arrived as intended. Still **0** reads of the diagnosis file, **0** `/recall` / `/clarify`.
+The reasoning summaries open with a plan every time. The substance of both probes is there
+implicitly — the model noticed two readings of "idle USDC" and measured both instead of asking
+(a sound VoI call), and grounded a figure in a committed note while discounting it as stale —
+but nothing marks it as the diagnosis. Both asks were concrete, so "no deficit, act" was the
+right outcome, and **that outcome looks exactly like a model that never ran the step.** The
+nudge can't be evaluated while a silent pass and a skip are indistinguishable.
+
+**Change (mod 0.3.5).** The nudge now asks for the verdict as one line in the reasoning, before
+the model acts or answers: `x/y: none | x → /recall | y → /clarify | both` and what decided it,
+kept out of the reply unless it sends the model to `/recall` or `/clarify`, and skipped when
+there is no private reasoning (thinking off, some `claude -p` runs) so it can't leak into every
+reply. Against Open UU #2 (user attention is a finite budget): the line adds nothing to the
+reply, so a warm directive stream asks no extra reading of the user. It is not free: a few
+output tokens and some latency per nudged prompt, and one more line for whoever has
+`showThinkingSummaries` on. `evals/card-pull.mjs` reads the same file, so its `nudge` arm replays the new
+text; that arm's numbers were already retracted, so no recorded result changes.
+
+**Known limits.**
+- The reasoning summary is a paraphrase; a one-line verdict may be compressed away. If the line
+  never shows in summaries, that says nothing about whether it was written.
+- It shows the step was taken, not that its verdict was right — judging that still needs
+  `labels` on where the nudge runs.
+- Asking for a verdict is itself a change to the nudge (writing it down may shift behaviour), not
+  a neutral probe; read before/after numbers as two different nudges. The re-validation debt
+  stays open.
+
 ## What shipped (done)
 
 - `/fresh-lens` skill (detect + audit), mandates embedded.
