@@ -123,6 +123,25 @@ const loadPrompt = async ($: EngineInterface, name: string) => {
   }
 }
 
+const configDir = async ($: EngineInterface) =>
+  (await $.env.get('CLAUDE_CONFIG_DIR')) ?? `${await $.env.get('HOME')}/.claude`
+
+// The nudge points the model at the full x/y diagnosis, so it must name where that file really
+// is. It held a relative `.claude/skills/xy-diagnosis.md`, which resolves only in a project that
+// carries its own copy — the evals' sandbox does, but install.sh links the skills into the
+// user's Claude directory, so in every live session the nudge pointed at nothing. The prompt
+// file keeps a slot; the project's copy wins (as in the evals), then the installed one, and with
+// neither the reference is dropped rather than left dangling.
+const XY_SLOT = '{{xy-diagnosis}}'
+const placeDiagnosis = async ($: EngineInterface, text: string) => {
+  if (!text.includes(XY_SLOT)) return text
+  const { here } = await roots($)
+  for (const path of [`${here}/.claude/skills/xy-diagnosis.md`, `${await configDir($)}/skills/xy-diagnosis.md`]) {
+    if (await $.fs.exists(path)) return text.replace(XY_SLOT, path)
+  }
+  return text.replace(` (${XY_SLOT})`, '').replace(XY_SLOT, 'xy-diagnosis.md')
+}
+
 // Labels live in one JSONL file per project under the user's Claude directory: never inside a
 // repository (they hold prompts), never in $.store (one 4 MiB file shared by every project).
 const labelsFile = async ($: EngineInterface) => {
@@ -179,8 +198,7 @@ const saveLabel = async ($: EngineInterface, label: YfxMode, why: string, expect
   return { saved: true as const, id: move.id, count: (await readLabels($, path)).length }
 }
 
-const labelsDir = async ($: EngineInterface) =>
-  `${(await $.env.get('CLAUDE_CONFIG_DIR')) ?? `${await $.env.get('HOME')}/.claude`}/yfx/labels`
+const labelsDir = async ($: EngineInterface) => `${await configDir($)}/yfx/labels`
 
 // Where the labels go: the yfx checkout whose evals read them — from any project, since every
 // working session is eval data. Given once (`/yfx export <path>`), then remembered; the
@@ -266,7 +284,7 @@ export const register: Register = on => {
       $.ui.toast('yfx is installed, every probe off. /yfx shows them; /yfx on labels starts asking.')
       await $.store.set('introduced', true)
     }
-    nudge = await loadPrompt($, 'xy-nudge')
+    nudge = await placeDiagnosis($, await loadPrompt($, 'xy-nudge'))
     lensReminder = await loadPrompt($, 'fresh-lens')
     await refresh($)
     return next(e)

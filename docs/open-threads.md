@@ -501,6 +501,30 @@ after install toasts once where the switches are, since an all-off mod is otherw
 Known limits: the ⚠ is the engine's, shown whenever a probe is on; the name-in-status
 observation is from the terminal only; the band's hotkeys work only once the band has focus.
 
+## Update 2026-11-23 — the nudge's pointer to the diagnosis was dead in every live session
+
+**What a look at live use found.** The nudge is on in one working project (by `RECALL_LOOP=1`;
+no project has it on by `/yfx on`). Across that project's transcripts, 2026-11-18..23: 18
+nudged prompts, and **0** `/recall`, **0** `/clarify` or questions to the user, **0** reads of
+the diagnosis file, no visible x/y reasoning in any reply. Whether the model diagnosed silently
+can't be told — the transcripts redact thinking. `labels` was off there, so there is no gold
+label to say whether any of the 18 deserved a probe.
+
+**One cause was mechanical.** The text pointed at `.claude/skills/xy-diagnosis.md` — relative,
+so it resolves only in a project carrying its own copy. `install.sh` links the skills into the
+user's Claude directory instead, so in every live session the nudge pointed at nothing. The
+card-pull `nudge` arm never saw this: `makeProject` stages the skills at the sandbox project's
+`.claude/skills/`, where the relative path happened to work. **An eval-vs-live gap** — the
+nudge arm measured a condition live sessions never had (that arm's numbers were already
+retracted as noise, so no recorded result changes).
+
+**Fix (mod 0.3.4).** `prompts/xy-nudge.md` holds a `{{xy-diagnosis}}` slot; the mod fills it at
+session start with the file's real path (the project's copy first, as in the evals, then
+`$CLAUDE_CONFIG_DIR` or `~/.claude`), and with neither it drops the reference rather than leave
+it dangling. `evals/card-pull.mjs` fills the slot the way the mod would in its sandbox, so "same
+words, one file" holds. The delivered nudge is otherwise unchanged, so its re-validation debt
+stays open; the cheapest real evidence is `labels` on in the project where the nudge runs.
+
 ## What shipped (done)
 
 - `/fresh-lens` skill (detect + audit), mandates embedded.

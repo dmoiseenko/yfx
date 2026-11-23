@@ -25,6 +25,13 @@ test("the nudge still routes to both levers", () => {
   assert.match(prompt("xy-nudge"), /\/clarify/);
 });
 
+// The mod fills the slot with the file's real path (install.sh links it into the user's Claude
+// directory); a relative `.claude/skills/...` written into the text pointed at nothing live.
+test("the nudge names the diagnosis file through the slot, not a fixed path", () => {
+  assert.equal(prompt("xy-nudge").split("{{xy-diagnosis}}").length, 2);
+  assert.ok(!prompt("xy-nudge").includes(".claude/skills/"));
+});
+
 test("the lens reminder still names the audit it triggers", () => {
   assert.match(prompt("fresh-lens"), /\/fresh-lens/);
 });

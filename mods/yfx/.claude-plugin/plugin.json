@@ -1,6 +1,6 @@
 {
   "name": "yfx",
-  "version": "0.3.3",
+  "version": "0.3.4",
   "description": "y=f(x) in Claude Code: the always-on probes (x/y nudge, commit-boundary fresh-lens trigger) behind /yfx toggles, and in-session user labels (the eval gold tier)",
   "author": {
     "name": "Denis Moiseenko"

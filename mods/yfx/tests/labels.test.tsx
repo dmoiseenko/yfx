@@ -74,7 +74,7 @@ const world = (
       .map(path => ({ name: path.slice(e.path.length + 1), kind: 'file' as const, size: 0, mtimeMs: 0, isLink: false })),
   }))
   on('fs.read', (_$, e) => {
-    if (e.path.endsWith('/prompts/xy-nudge.md')) return { value: 'NUDGE\n' }
+    if (e.path.endsWith('/prompts/xy-nudge.md')) return { value: 'NUDGE ({{xy-diagnosis}})\n' }
     if (e.path.endsWith('/prompts/fresh-lens.md')) return { value: 'LENS\n' }
     const text = files.get(e.path)
     return text === undefined ? { deny: 'ENOENT' } : { value: text }
@@ -218,6 +218,25 @@ test('nudge: attached to a substantive user prompt only while on', async ($, on)
   await $.prompt.submit({ ...PROMPT, origin: { kind: 'task-notification' } })
   expect(contexts).toEqual([undefined, ['NUDGE'], undefined, undefined])
 })
+
+// The nudge names the diagnosis file where it is, or drops the reference: one world per case,
+// since an engine's hooks are fixed before its first call.
+const INSTALLED = `${HOME}/.claude/skills/xy-diagnosis.md`
+const IN_PROJECT = `${ROOT}/.claude/skills/xy-diagnosis.md`
+for (const [name, files, env, said] of [
+  ['nowhere: the reference is dropped', [], {}, 'NUDGE'],
+  ['installed in the user\'s Claude directory', [INSTALLED], {}, `NUDGE (${INSTALLED})`],
+  ['the project\'s own copy wins, as in the evals', [INSTALLED, IN_PROJECT], {}, `NUDGE (${IN_PROJECT})`],
+  ['CLAUDE_CONFIG_DIR moves the installed one', ['/cfg/skills/xy-diagnosis.md'], { CLAUDE_CONFIG_DIR: '/cfg' }, 'NUDGE (/cfg/skills/xy-diagnosis.md)'],
+] as const) {
+  test(`nudge: the diagnosis file, ${name}`, async ($, on) => {
+    const w = world(on, ROOT, env, { [`nudge-on:${ROOT}`]: true })
+    for (const path of files) w.files.set(path, '# x/y')
+    await $.session.start({ cwd: ROOT, surface: 'terminal', isInteractive: true })
+    await $.prompt.submit(PROMPT)
+    expect(w.contexts).toEqual([[said]])
+  })
+}
 
 test('nudge: RECALL_LOOP=0 wins over the toggle and says so — the evals\' clean control', async ($, on) => {
   const { contexts } = world(on, ROOT, { RECALL_LOOP: '0' })

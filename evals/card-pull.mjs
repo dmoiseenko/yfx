@@ -45,7 +45,11 @@ import { join } from "node:path";
 import { ROOT, REPO, MODEL } from "./lib.mjs";
 import { PROBE_TOOL, DECOY_TOOLS } from "./probe-mcp.mjs";
 // The very text the yfx mod attaches (mods/yfx/prompts/xy-nudge.md), read from the same file.
-const XY_NUDGE = readFileSync(join(REPO, "mods", "yfx", "prompts", "xy-nudge.md"), "utf8").trim();
+// Its {{xy-diagnosis}} slot gets what the mod fills in here: makeProject stages the file at the
+// project's .claude/skills/, and the mod prefers the project's copy.
+const XY_NUDGE = readFileSync(join(REPO, "mods", "yfx", "prompts", "xy-nudge.md"), "utf8")
+  .trim()
+  .replace("{{xy-diagnosis}}", ".claude/skills/xy-diagnosis.md");
 
 const pexec = promisify(execFile);
 const KNOWN_ARMS = ["pull", "nudge", "push", "control"];
