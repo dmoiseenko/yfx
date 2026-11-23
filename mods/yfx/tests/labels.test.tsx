@@ -42,6 +42,7 @@ const world = (
   root = ROOT,
   env: Record<string, string> = {},
   store: Record<string, unknown> = {},
+  existsFails = false,
 ): World => {
   const files = new Map<string, string>()
   const ignored = new Set<string>(['evals/out/live-dataset.jsonl'])
@@ -60,7 +61,7 @@ const world = (
   on('turn.complete', (_$, e) => ({ text: e.answer }))
   on('skill.prompt', (_$, e) => ({ text: e.text }))
   on('session.root', () => ({ value: root }))
-  on('fs.exists', (_$, e) => ({
+  on('fs.exists', (_$, e) => existsFails && e.path.includes('/skills/') ? { deny: 'EACCES' } : ({
     value: files.has(e.path) || [...files.keys()].some(path => path.startsWith(`${e.path}/`)),
   }))
   on('fs.stat', (_$, e) => {
@@ -74,7 +75,7 @@ const world = (
       .map(path => ({ name: path.slice(e.path.length + 1), kind: 'file' as const, size: 0, mtimeMs: 0, isLink: false })),
   }))
   on('fs.read', (_$, e) => {
-    if (e.path.endsWith('/prompts/xy-nudge.md')) return { value: 'NUDGE\n' }
+    if (e.path.endsWith('/prompts/xy-nudge.md')) return { value: 'NUDGE ({{xy-diagnosis}})\n' }
     if (e.path.endsWith('/prompts/fresh-lens.md')) return { value: 'LENS\n' }
     const text = files.get(e.path)
     return text === undefined ? { deny: 'ENOENT' } : { value: text }
@@ -217,6 +218,37 @@ test('nudge: attached to a substantive user prompt only while on', async ($, on)
   await $.prompt.submit({ ...PROMPT, text: 'да' })
   await $.prompt.submit({ ...PROMPT, origin: { kind: 'task-notification' } })
   expect(contexts).toEqual([undefined, ['NUDGE'], undefined, undefined])
+})
+
+// The nudge names the diagnosis file where it is, or drops the reference: one world per case,
+// since an engine's hooks are fixed before its first call.
+const INSTALLED = `${HOME}/.claude/skills/xy-diagnosis.md`
+const IN_PROJECT = `${ROOT}/.claude/skills/xy-diagnosis.md`
+for (const [name, files, env, said] of [
+  ['nowhere: the reference is dropped', [], {}, 'NUDGE'],
+  ['installed in the user\'s Claude directory', [INSTALLED], {}, `NUDGE (${INSTALLED})`],
+  ['the project\'s own copy wins, as in the evals', [INSTALLED, IN_PROJECT], {}, `NUDGE (${IN_PROJECT})`],
+  ['CLAUDE_CONFIG_DIR moves the installed one', ['/cfg/skills/xy-diagnosis.md'], { CLAUDE_CONFIG_DIR: '/cfg' }, 'NUDGE (/cfg/skills/xy-diagnosis.md)'],
+  ['~/.claude still counts when CLAUDE_CONFIG_DIR is set (install.sh ignores it)', [INSTALLED], { CLAUDE_CONFIG_DIR: '/cfg' }, `NUDGE (${INSTALLED})`],
+  ['an empty CLAUDE_CONFIG_DIR means ~/.claude', [INSTALLED], { CLAUDE_CONFIG_DIR: '' }, `NUDGE (${INSTALLED})`],
+  ['a `$` in the path stays literal', ['/c$&fg/skills/xy-diagnosis.md'], { CLAUDE_CONFIG_DIR: '/c$&fg' }, 'NUDGE (/c$&fg/skills/xy-diagnosis.md)'],
+] as const) {
+  test(`nudge: the diagnosis file, ${name}`, async ($, on) => {
+    const w = world(on, ROOT, env, { [`nudge-on:${ROOT}`]: true })
+    for (const path of files) w.files.set(path, '# x/y')
+    await $.session.start({ cwd: ROOT, surface: 'terminal', isInteractive: true })
+    await $.prompt.submit(PROMPT)
+    expect(w.contexts).toEqual([[said]])
+  })
+}
+
+test('nudge: a failed lookup drops the reference and leaves lens and status working', async ($, on) => {
+  const w = world(on, ROOT, {}, { [`nudge-on:${ROOT}`]: true, [`lens-on:${ROOT}`]: true }, true)
+  await $.session.start({ cwd: ROOT, surface: 'terminal', isInteractive: true })
+  await $.prompt.submit(PROMPT)
+  expect(w.contexts).toEqual([['NUDGE']])
+  expect((await bash($, 'git commit -m x')).context).toEqual(['LENS'])
+  expect(w.statuses.at(-1)).toBe('nudge● lens● labels○')
 })
 
 test('nudge: RECALL_LOOP=0 wins over the toggle and says so — the evals\' clean control', async ($, on) => {
